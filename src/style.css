@@ -1,0 +1,110 @@
+:root {
+  --gray1: rgb(0, 0, 0);
+  --gray2: rgb(15, 15, 15);
+  --gray3: rgb(30, 30, 30);
+  --gray4: rgb(45, 45, 45);
+  --gray5: rgb(60, 60, 60);
+  --gray6: rgb(75, 75, 75);
+  --gray7: rgb(90, 90, 90);
+  --gray8: rgb(105, 105, 105);
+  --gray9: rgb(120, 120, 120);
+  --gray10: rgb(135, 135, 135);
+  --gray11: rgb(150, 150, 150);
+  --gray12: rgb(165, 165, 165);
+  --gray13: rgb(180, 180, 180);
+  --gray14: rgb(195, 195, 195);
+  --gray15: rgb(210, 210, 210);
+  --gray16: rgb(225, 225, 225);
+  --gray17: rgb(240, 240, 240);
+  --gray18: rgb(255, 255, 255);
+  --purple1: rgb(23,9,38);
+  --purple2: rgb(38,15,64);
+  --purple3: rgb(106,43,178);
+  --purple4: rgb(152,61,255);
+  --purple5: rgb(187,128,255);
+}
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  font-weight: normal;
+}
+body {
+  min-height: 100%;
+  font-family: Arial, 'Helvetica Neue', sans-serif;
+  font-size: 19px;
+  line-height: 1.6;
+  background: var(--purple1);
+  background-image: url('pic/gradient.png');
+  color: var(--gray16);
+}
+span {
+  color: var(--purple5);
+}
+a {
+  color: var(--purple5);
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  max-width: 960px;
+  margin: 32px auto 0 auto;
+}
+.logo {
+  max-height: 150px;
+  padding-left: 24px;
+}
+.usericon {
+  max-height: 48px;
+}
+.account {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  max-height: 40px;
+}
+.container {
+  display: flex;
+  max-width: 960px;
+  margin: 0px auto 24px auto;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 32px;
+  background: var(--purple1);
+  padding: 24px 28px;
+  border-radius: 8px;
+}
+.container-main {
+  background: var(--purple3);
+}
+.container-second {
+  background: var(--purple2);
+}
+.column {
+  width:50%;
+}
+.footer {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+.flex-space {
+  margin-left: auto;
+  margin-top: auto;
+}
+.headline {
+  font-size: 32px;
+  margin-left: 32px;
+  color: var(--purple5);
+  /*color: var(--gray14);*/
+  font-weight: bold;
+}
+.our {
+  color: var(--purple4);
+  /*font-weight: bold;*/
+}
+.slogan {
+  margin-left: 32px;
+  color: var(--gray10);
+  font-style: italic;
+}
