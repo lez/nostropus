@@ -4,10 +4,15 @@
     <button v-if="!pubkey" @click="onLogin">Log in</button>
 
     <div class="relaygrid" v-if="wrelays && wrelays.length">
+      <div class="line">
+        <span class="item">Relay URL</span>
+        <span class="item">Relay List Event</span>
+        <span class="item">Profile</span>
+      </div>
       <div class="line" v-for="r in wrelays">
-        <span class="item">icon</span>
         <span class="item">{{r}}</span>
-        <span class="item">{{seen[r] && seen[r].created_at}}</span>
+        <span class="item">{{rseen[r] && rseen[r].created_at}}</span>
+        <span class="item">{{pseen[r] && pseen[r].created_at}}</span>
       </div>
     </div>
   </div>
@@ -23,20 +28,23 @@ const pubkey = ref(null)
 const npub = ref(null)
 const pool = new SimplePool()
 const wrelays = ref(null)  // [relayurl]
-const events = ref({})  // {id: {event}}
-const seen = ref({})  // {relayurl: {event}}
+const profiles = ref({})  // {id: {event}}
+const relaylists = ref({})  // {id: {event}}
+const pseen = ref({})  // {relayurl: {profile event}}
+const rseen = ref({})  // {relayurl: {relaylist event}}
 
-function updateSeen() {
-  console.log('updateSeen')
+function updateSeen(kind, events, seen) {
+  console.log('> updateSeen')
   for(let value of pool.seenOn) {
     console.log('updateSeen', value[0])
     let id = value[0]
-    let relays = value[1]
-    for (let r of relays) {
-      console.log(`Add ${id} to`, r.url)
-      seen.value[r.url] = events[id]
+    if (id in events) {
+      let relays = value[1]
+      for (let r of relays) {
+        console.log(`Add ${id} to`, r.url)
+        seen.value[r.url] = events[id]
+      }
     }
-    // console.log(relays)
   }
 }
 
@@ -62,20 +70,42 @@ async function onLogin() {
     wrelays.value = Object.keys(rlist).map(normalizeURL)
 
     pool.trackRelays = true
+    let relaylist_latest = 0
+    let relaylist_latest_id = null
+    let profile_latest = 0
+    let profile_latest_id = null
 
     // Send out the minions.
-    let h = pool.subscribeMany(wrelays.value, [{authors: [pk], kinds: [0]}], {
+    let h = pool.subscribeMany(wrelays.value, [{authors: [pk], kinds: [0, 10002]}], {
       onevent: (event) => {
-        events[event.id] = event
-        console.log(`Event [${event.id}]`)
-        updateSeen()
-        // console.log(pool.seenOn)
-        // console.log(pool.seenOn)
+        console.log(`Event [${event.id}] kind [${event.kind}]`)
+        switch (event.kind) {
+          case 0:
+            profiles[event.id] = event
+            if (profile_latest < event.created_at) {
+              profile_latest = event.created_at
+            }
+            break
+          case 10002:
+            relaylists[event.id] = event
+
+            if (relaylist_latest < event.created_at) {
+              relaylist_latest = event.created_at
+              relaylist_latest_id = event.id
+            }
+            break
+
+          default:
+            throw Error('eek')
+        }
       },
       oneose: () => {
         console.log('EOSE')
         h.close()
-        console.log(pool.seenOn)
+        updateSeen(0, profiles, pseen)
+        updateSeen(10002, relaylists, rseen)
+        console.log('profile latest', profile_latest, relaylist_latest)
+        console.log('relaylist latest', relaylists[relaylist_latest_id].tags)
       }
     })
 
@@ -97,11 +127,9 @@ onMounted(async () => {
 <style scoped>
 .relaygrid {
   display: grid-inline;
-  /*grid-template-columns: 0.1fr 1fr 1fr;*/
-  gap: 1rem;
 }
 .line {
   display: grid;
-  grid-template-columns: 0.1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
 }
 </style>
