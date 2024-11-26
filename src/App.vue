@@ -11,12 +11,13 @@
         <span class="item">Profile</span>
       </div>
       <div class="line" v-for="r in wrelays">
-        <span class="item">{{r.userlist && "[yes]"}}</span>
+        <span class="item">{{r.userlist && "[ x ]" || "-"}}</span>
         <span class="item">{{r.url}}</span>
-        <span class="item">{{rseen[r.url] && rseen[r.url].created_at}}</span>
-        <span class="item">{{pseen[r.url] && pseen[r.url].created_at}}</span>
+        <span class="item" :class="{green: rseen[r.url] && rseen[r.url].created_at == relaylist_latest}">{{rseen[r.url] && rseen[r.url].created_at}}</span>
+        <span class="item" :class="{green: pseen[r.url] && pseen[r.url].created_at == profile_latest}">{{pseen[r.url] && pseen[r.url].created_at}}</span>
       </div>
     </div>
+    <button v-if="done" @click="onFix">Fix</button>
   </div>
 </template>
 
@@ -28,14 +29,19 @@ import { Relay } from 'nostr-tools/relay'
 
 const pubkey = ref(null)
 const npub = ref(null)
-const pool = new SimplePool()
 const wrelays = ref(null)  // [{url: relayurl, extension: bool, relaylist: bool}]
 const profiles = ref({})  // {id: {event}}
 const relaylists = ref({})  // {id: {event}}
 const pseen = ref({})  // {relayurl: {profile event}}
 const rseen = ref({})  // {relayurl: {relaylist event}}
+const relaylist_latest = ref(0)
+const profile_latest = ref(0)
+const done = ref(false)
 
+const pool = new SimplePool()
 let newrelays = []
+let relaylist_latest_id = null
+let profile_latest_id = null
 
 
 function updateSeen(kind, events, seen) {
@@ -76,32 +82,29 @@ async function onLogin() {
       function(r){
         return {
           url: normalizeURL(r),
-          extension: true
+          extension: true,
+          userlist: false,
         }
       }
     )
 
     pool.trackRelays = true
-    let relaylist_latest = 0
-    let relaylist_latest_id = null
-    let profile_latest = 0
-    let profile_latest_id = null
 
     let onEventFn = function (event) {
       console.log(`Event [${event.id}] kind [${event.kind}]`)
       switch (event.kind) {
         case 0:
           profiles[event.id] = event
-          if (profile_latest < event.created_at) {
-            profile_latest = event.created_at
+          if (profile_latest.value < event.created_at) {
+            profile_latest.value = event.created_at
             profile_latest_id = event.id
           }
           break
         case 10002:
           relaylists[event.id] = event
 
-          if (relaylist_latest < event.created_at) {
-            relaylist_latest = event.created_at
+          if (relaylist_latest.value < event.created_at) {
+            relaylist_latest.value = event.created_at
             relaylist_latest_id = event.id
           }
           break
@@ -119,7 +122,7 @@ async function onLogin() {
         h.close()
         updateSeen(0, profiles, pseen)
         updateSeen(10002, relaylists, rseen)
-        console.log('profile latest', profile_latest, relaylist_latest)
+        console.log('profile latest', profile_latest.value, relaylist_latest.value)
 
         console.log('relaylist latest', relaylists[relaylist_latest_id].tags)
         for (let t of relaylists[relaylist_latest_id].tags) {
@@ -147,7 +150,11 @@ async function onLogin() {
             h2.close()
             updateSeen(0, profiles, pseen)
             updateSeen(10002, relaylists, rseen)
+
+            wrelays.value.sort((a,b) => {if (a.userlist>b.userlist) return -1; if (a.userlist<b.userlist) return 1; return 0})
+
             console.log('DONE')
+            done.value = true
           }
         })
       }
@@ -155,6 +162,41 @@ async function onLogin() {
 
   } else {
     alert("Sorry, nostr.getRelays() must be supported by the extension.")
+  }
+}
+
+async function onFix() {
+  console.log("> onFix")
+  let event = relaylists[relaylist_latest_id]
+  console.log("The proper relaylist is", event)
+  let rfixlist = []
+  for (let r of wrelays.value) {
+    if (!r.userlist) continue
+    if (rseen.value[r.url]?.created_at === relaylist_latest.value) continue
+    rfixlist.push(r.url)
+  }
+  if (rfixlist.length) {
+    console.log("The lagging relays are", rfixlist)
+    await Promise.all(pool.publish(rfixlist, event))
+    console.log("Fixed relaylists")
+  } else {
+    console.log("Relay lists are fine")
+  }
+
+  let profile = profiles[profile_latest_id]
+  console.log("The proper profile is", profile)
+  let pfixlist = []
+  for (let r of wrelays.value) {
+    if (!r.userlist) continue
+    if (pseen.value[r.url]?.created_at === profile_latest.value) continue
+    pfixlist.push(r.url)
+  }
+  if (pfixlist.length) {
+    console.log("Profile is missing from relays", pfixlist)
+    await Promise.all(pool.publish(pfixlist, profile))
+    console.log("Fixed profiles")
+  } else {
+    console.log("Profiles are fine")
   }
 }
 
@@ -175,5 +217,8 @@ onMounted(async () => {
 .line {
   display: grid;
   grid-template-columns: 100px 1fr 1fr 1fr;
+}
+.green {
+  color: green;
 }
 </style>
