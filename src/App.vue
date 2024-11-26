@@ -5,14 +5,16 @@
 
     <div class="relaygrid" v-if="wrelays && wrelays.length">
       <div class="line">
+        <span class="item">Public</span>
         <span class="item">Relay URL</span>
         <span class="item">Relay List Event</span>
         <span class="item">Profile</span>
       </div>
       <div class="line" v-for="r in wrelays">
-        <span class="item">{{r}}</span>
-        <span class="item">{{rseen[r] && rseen[r].created_at}}</span>
-        <span class="item">{{pseen[r] && pseen[r].created_at}}</span>
+        <span class="item">{{r.userlist && "[yes]"}}</span>
+        <span class="item">{{r.url}}</span>
+        <span class="item">{{rseen[r.url] && rseen[r.url].created_at}}</span>
+        <span class="item">{{pseen[r.url] && pseen[r.url].created_at}}</span>
       </div>
     </div>
   </div>
@@ -27,11 +29,14 @@ import { Relay } from 'nostr-tools/relay'
 const pubkey = ref(null)
 const npub = ref(null)
 const pool = new SimplePool()
-const wrelays = ref(null)  // [relayurl]
+const wrelays = ref(null)  // [{url: relayurl, extension: bool, relaylist: bool}]
 const profiles = ref({})  // {id: {event}}
 const relaylists = ref({})  // {id: {event}}
 const pseen = ref({})  // {relayurl: {profile event}}
 const rseen = ref({})  // {relayurl: {relaylist event}}
+
+let newrelays = []
+
 
 function updateSeen(kind, events, seen) {
   console.log('> updateSeen')
@@ -67,7 +72,14 @@ async function onLogin() {
     console.log(rlist)
 
     // TODO: Differentiate read and write relays.
-    wrelays.value = Object.keys(rlist).map(normalizeURL)
+    wrelays.value = Object.keys(rlist).map(
+      function(r){
+        return {
+          url: normalizeURL(r),
+          extension: true
+        }
+      }
+    )
 
     pool.trackRelays = true
     let relaylist_latest = 0
@@ -75,37 +87,69 @@ async function onLogin() {
     let profile_latest = 0
     let profile_latest_id = null
 
+    let onEventFn = function (event) {
+      console.log(`Event [${event.id}] kind [${event.kind}]`)
+      switch (event.kind) {
+        case 0:
+          profiles[event.id] = event
+          if (profile_latest < event.created_at) {
+            profile_latest = event.created_at
+            profile_latest_id = event.id
+          }
+          break
+        case 10002:
+          relaylists[event.id] = event
+
+          if (relaylist_latest < event.created_at) {
+            relaylist_latest = event.created_at
+            relaylist_latest_id = event.id
+          }
+          break
+
+        default:
+          throw Error('eek')
+      }
+    }
+
     // Send out the minions.
-    let h = pool.subscribeMany(wrelays.value, [{authors: [pk], kinds: [0, 10002]}], {
-      onevent: (event) => {
-        console.log(`Event [${event.id}] kind [${event.kind}]`)
-        switch (event.kind) {
-          case 0:
-            profiles[event.id] = event
-            if (profile_latest < event.created_at) {
-              profile_latest = event.created_at
-            }
-            break
-          case 10002:
-            relaylists[event.id] = event
-
-            if (relaylist_latest < event.created_at) {
-              relaylist_latest = event.created_at
-              relaylist_latest_id = event.id
-            }
-            break
-
-          default:
-            throw Error('eek')
-        }
-      },
+    let h = pool.subscribeMany(wrelays.value.map(r => r.url), [{authors: [pk], kinds: [0, 10002]}], {
+      onevent: onEventFn,
       oneose: () => {
         console.log('EOSE')
         h.close()
         updateSeen(0, profiles, pseen)
         updateSeen(10002, relaylists, rseen)
         console.log('profile latest', profile_latest, relaylist_latest)
+
         console.log('relaylist latest', relaylists[relaylist_latest_id].tags)
+        for (let t of relaylists[relaylist_latest_id].tags) {
+          console.log('tag', t)
+          let found = false
+          if (t[0] !== 'r') continue
+          let nurl = normalizeURL(t[1])
+          for (let tt of wrelays.value) {
+            if (tt.url == nurl) {
+              // Updating existing relay props.
+              tt.userlist = true
+              found = true
+            }
+          }
+          if (!found) {
+            // Add relay to the end of wrelays.
+            wrelays.value.push({url: nurl, extension: false, userlist: true})
+            newrelays.push(nurl)
+          }
+        }
+        let h2 = pool.subscribeMany(wrelays.value.map(r => r.url), [{authors: [pk], kinds: [0, 10002]}], {
+          onevent: onEventFn,
+          oneose: () => {
+            console.log('EOSE')
+            h2.close()
+            updateSeen(0, profiles, pseen)
+            updateSeen(10002, relaylists, rseen)
+            console.log('DONE')
+          }
+        })
       }
     })
 
@@ -130,6 +174,6 @@ onMounted(async () => {
 }
 .line {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 100px 1fr 1fr 1fr;
 }
 </style>
