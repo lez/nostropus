@@ -87,82 +87,85 @@ async function onLogin() {
         }
       }
     )
+  } else {
+    wrelays.value = [
+      {url: "wss://purplepag.es/", extension: true, userlist: false},
+      {url: "wss://nos.lol/", extension: true, userlist: false},
+      {url: "wss://relay.damus.io/", extension: true, userlist: false},
+    ]
+  }
 
-    pool.trackRelays = true
+  pool.trackRelays = true
 
-    let onEventFn = function (event) {
-      console.log(`Event [${event.id}] kind [${event.kind}]`)
-      switch (event.kind) {
-        case 0:
-          profiles[event.id] = event
-          if (profile_latest.value < event.created_at) {
-            profile_latest.value = event.created_at
-            profile_latest_id = event.id
-          }
-          break
-        case 10002:
-          relaylists[event.id] = event
+  let onEventFn = function (event) {
+    console.log(`Event [${event.id}] kind [${event.kind}]`)
+    switch (event.kind) {
+      case 0:
+        profiles[event.id] = event
+        if (profile_latest.value < event.created_at) {
+          profile_latest.value = event.created_at
+          profile_latest_id = event.id
+        }
+        break
+      case 10002:
+        relaylists[event.id] = event
 
-          if (relaylist_latest.value < event.created_at) {
-            relaylist_latest.value = event.created_at
-            relaylist_latest_id = event.id
-          }
-          break
+        if (relaylist_latest.value < event.created_at) {
+          relaylist_latest.value = event.created_at
+          relaylist_latest_id = event.id
+        }
+        break
 
-        default:
-          throw Error('eek')
-      }
+      default:
+        throw Error('eek')
     }
+  }
 
-    // Send out the minions.
-    let h = pool.subscribeMany(wrelays.value.map(r => r.url), [{authors: [pk], kinds: [0, 10002]}], {
-      onevent: onEventFn,
-      oneose: () => {
-        console.log('EOSE')
-        h.close()
-        updateSeen(0, profiles, pseen)
-        updateSeen(10002, relaylists, rseen)
-        console.log('profile latest', profile_latest.value, relaylist_latest.value)
+  // Send out the minions.
+  let h = pool.subscribeMany(wrelays.value.map(r => r.url), [{authors: [pk], kinds: [0, 10002]}], {
+    onevent: onEventFn,
+    oneose: () => {
+      console.log('EOSE')
+      h.close()
+      updateSeen(0, profiles, pseen)
+      updateSeen(10002, relaylists, rseen)
+      console.log('profile latest', profile_latest.value, relaylist_latest.value)
 
-        console.log('relaylist latest', relaylists[relaylist_latest_id].tags)
-        for (let t of relaylists[relaylist_latest_id].tags) {
-          console.log('tag', t)
-          let found = false
-          if (t[0] !== 'r') continue
-          let nurl = normalizeURL(t[1])
-          for (let tt of wrelays.value) {
-            if (tt.url == nurl) {
-              // Updating existing relay props.
-              tt.userlist = true
-              found = true
-            }
-          }
-          if (!found) {
-            // Add relay to the end of wrelays.
-            wrelays.value.push({url: nurl, extension: false, userlist: true})
-            newrelays.push(nurl)
+      console.log('relaylist latest', relaylists[relaylist_latest_id].tags)
+      for (let t of relaylists[relaylist_latest_id].tags) {
+        console.log('tag', t)
+        let found = false
+        if (t[0] !== 'r') continue
+        let nurl = normalizeURL(t[1])
+        for (let tt of wrelays.value) {
+          if (tt.url == nurl) {
+            // Updating existing relay props.
+            tt.userlist = true
+            found = true
           }
         }
-        let h2 = pool.subscribeMany(wrelays.value.map(r => r.url), [{authors: [pk], kinds: [0, 10002]}], {
-          onevent: onEventFn,
-          oneose: () => {
-            console.log('EOSE')
-            h2.close()
-            updateSeen(0, profiles, pseen)
-            updateSeen(10002, relaylists, rseen)
-
-            wrelays.value.sort((a,b) => {if (a.userlist>b.userlist) return -1; if (a.userlist<b.userlist) return 1; return 0})
-
-            console.log('DONE')
-            done.value = true
-          }
-        })
+        if (!found) {
+          // Add relay to the end of wrelays.
+          wrelays.value.push({url: nurl, extension: false, userlist: true})
+          newrelays.push(nurl)
+        }
       }
-    })
+      let h2 = pool.subscribeMany(wrelays.value.map(r => r.url), [{authors: [pk], kinds: [0, 10002]}], {
+        onevent: onEventFn,
+        oneose: () => {
+          console.log('EOSE')
+          h2.close()
+          updateSeen(0, profiles, pseen)
+          updateSeen(10002, relaylists, rseen)
 
-  } else {
-    alert("Sorry, nostr.getRelays() must be supported by the extension.")
-  }
+          wrelays.value.sort((a,b) => {if (a.userlist>b.userlist) return -1; if (a.userlist<b.userlist) return 1; return 0})
+
+          console.log('DONE')
+          done.value = true
+        }
+      })
+    }
+  })
 }
 
 async function onFix() {
