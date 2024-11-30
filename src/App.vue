@@ -13,8 +13,8 @@
       <div class="line" v-for="r in wrelays">
         <span class="item">{{r.userlist && "[ x ]" || "-"}}</span>
         <span class="item">{{r.url}}</span>
-        <span class="item" :class="{green: rseen[r.url] && rseen[r.url].created_at == relaylist_latest}">{{rseen[r.url] && rseen[r.url].created_at}}</span>
-        <span class="item" :class="{green: pseen[r.url] && pseen[r.url].created_at == profile_latest}">{{pseen[r.url] && pseen[r.url].created_at}}</span>
+        <span class="item" :class="{green: rseen[r.url] && rseen[r.url].created_at == relaylist_latest}">{{rseen[r.url] && (new Date(rseen[r.url].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}</span>
+        <span class="item" :class="{green: pseen[r.url] && pseen[r.url].created_at == profile_latest}">{{pseen[r.url] && (new Date(pseen[r.url].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}</span>
       </div>
     </div>
     <button v-if="done" @click="onFix">Fix</button>
