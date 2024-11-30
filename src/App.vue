@@ -203,11 +203,23 @@ async function onFix() {
   }
 }
 
+async function waitForWindowNostr() {
+  let delay = 0
+  while (!window.nostr) {
+    await new Promise((resolve, reject) => {setTimeout(resolve, Math.floor(delay))})
+    delay = delay + 1
+    if (delay > 50) {
+      console.log("Nostr extension not installed")
+      break
+    }
+  }
+}
+
 onMounted(async () => {
-  // window.app = module
+  console.clear()
   let pk = window.localStorage.getItem('pubkey')
   if (pk) {
-    await new Promise((resolve, reject) => {setTimeout(resolve, 1000)})
+    await waitForWindowNostr()
     onLogin()
   }
 })
