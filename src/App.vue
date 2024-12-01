@@ -12,6 +12,7 @@
         <span class="item">Follows</span>
         <span class="item">Blossom</span>
       </div>
+
       <div class="line" v-for="r in relays">
         <span class="item">{{r.userlist && "[ x ]" || "-"}}</span>
         <span class="item">
@@ -47,6 +48,14 @@
           <div v-if="10066 in r.events && !r.events[10066]" class="red">event not found</div>
         </span>
       </div>
+
+      <div v-for="note in notes" class="note">
+        <span v-for="r in relays" class="dot" :class="{green: r.note_ids.has(note.id)}">
+          o
+        </span>
+        <span class="note-created-at">{{ (new Date(note.created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false}) }}</span>
+        <span class="note-content">{{ note.content.substr(0, 81) }}</span>
+      </div>
     </div>
     <button v-if="done" @click="onFix">Fix</button>
   </div>
@@ -68,9 +77,9 @@ const bootstrap_only_relays = ref([])
 const notes = ref([])
 
 // Global but not reactive
-let newrelays = []
 let promises = []
 let newpromises = [] // temporary list to be added to promises
+let note_ids = new Set()
 let pk = null
 
 function trackLatest(event, relay_url="some relay") {
@@ -110,7 +119,7 @@ function getOnEventFn(relay) {
             }
             if (!found) {
               // Add relay to the end of wrelays.
-              let nr = {url: nurl, extension: false, userlist: true, events: {}}
+              let nr = {url: nurl, extension: false, userlist: true, events: {}, note_ids: new Set()}
               relays.value.push(nr)
               newpromises.push(
                 skyLaunch(
@@ -163,6 +172,37 @@ function skyLaunch(r, kinds=[10002]) {
   })
 }
 
+function fetchNotes(r) {
+  return new Promise((resolve, reject) => {
+    console.assert(r.events)  // It should be set to {}.
+    console.assert(r.note_ids)  // It should be set to Set().
+
+    let subparams = {
+      onevent: (e) => {
+        console.log('onevent', e.id)
+        r.note_ids.add(e.id)
+        if (note_ids.has(e.id)) {
+          console.log('dup event', e.id)
+        } else {
+          console.log('FIRST event', e.id)
+          note_ids.add(e.id)
+          notes.value.push(e)
+          notes.value.sort((a, b) => {if (a.created_at > b.created_at) return -1; if (a.created_at < b.created_at) return 1; return 0})
+        }
+      },
+      onclose: (e) => {
+        //WE_ARE_HERE: what to do here? All oncloses should be disabled when data was fetched from relays.
+        r.error = e
+        console.log(r.url, "subscription closed", e)
+        reject(e)
+      }
+    }
+
+    console.log("Fetching notest from ", r.url)
+    r.relay.subscribe([{authors: [pk], kinds: [1]}], subparams)
+  })
+}
+
 async function onLogin() {
   pk = await window.nostr.getPublicKey()
   if (pk) {
@@ -187,15 +227,16 @@ async function onLogin() {
           url: normalizeURL(r),
           extension: true,
           userlist: false,
-          events: {}
+          events: {},
+          note_ids: new Set(),
         }
       }
     )
   } else {
     relays.value = [
-      {url: "wss://purplepag.es/", extension: true, userlist: false, events: {}},
-      {url: "wss://nos.lol/", extension: true, userlist: false, events: {}},
-      {url: "wss://relay.damus.io/", extension: true, userlist: false, events: {}},
+      {url: "wss://purplepag.es/", extension: true, userlist: false, events: {}, note_ids: new Set()},
+      {url: "wss://nos.lol/", extension: true, userlist: false, events: {}, note_ids: new Set()},
+      {url: "wss://relay.damus.io/", extension: true, userlist: false, events: {}, note_ids: new Set()},
     ]
   }
 
@@ -205,7 +246,7 @@ async function onLogin() {
 
   while (true) {
     console.log(`Waiting for [${promises.length}] promises`)
-    let r = await Promise.allSettled(promises)
+    await Promise.allSettled(promises)
     // Move 10002 relays up the list.
     relays.value.sort((a,b) => {
       if (a.userlist>b.userlist) return -1;
@@ -240,13 +281,16 @@ async function onLogin() {
   relays.value = relays.value.splice(0, ul)
 
   console.log(`Waiting for [${promises.length}] promises`)
-  let r = await Promise.allSettled(promises)
+  await Promise.allSettled(promises)
 
   console.log('Now fetching the notes.')
   promises = []
   for (let r of relays.value) {
     promises.push(fetchNotes(r))
   }
+
+  console.log(`Waiting for [${promises.length}] note fetching promises`)
+  await Promise.allSettled(promises)
 }
 
 async function onFix() {
@@ -315,7 +359,8 @@ onMounted(async () => {
   grid-template-columns: 100px 1fr 0.3fr 0.3fr 0.3fr 0.3fr;
 }
 .item {
-  /*overflow: wot?;*/
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .green {
@@ -323,5 +368,18 @@ onMounted(async () => {
 }
 .red {
   color: #b00;
+}
+.notes {
+  display: grid;
+  white-space: nowrap;
+}
+.note-content {
+  width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-created-at {
+  white-space: nowrap;
 }
 </style>
