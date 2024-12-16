@@ -5,7 +5,7 @@
 
     <div class="relaygrid" v-if="relays && relays.length">
       <div class="line">
-        <span class="item">Public</span>
+        <span class="item"></span>
         <span class="item">Relay URL</span>
         <span class="item">Relay List Event</span>
         <span class="item">Profile</span>
@@ -13,10 +13,10 @@
         <span class="item">Blossom</span>
       </div>
 
-      <div class="line" v-for="r in relays">
-        <span class="item">{{r.userlist && "[ x ]" || "-"}}</span>
+      <div class="line" v-for="r, ridx in relays">
+        <div class="item"></div>
         <span class="item">
-          <span>{{r.url}}</span>
+          <span :class="{bold: (hovered_relay == ridx)}">{{r.url}}</span>
           <span v-if="r.error" class="red">{{ r.error }}</span>
         </span>
 
@@ -50,9 +50,9 @@
       </div>
 
       <div v-for="note in notes" class="note">
-        <span v-for="r in relays" class="dot" :class="{green: r.note_ids.has(note.id)}">
+        <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur">
           o
-        </span>
+        </div>
         <span class="note-created-at">{{ (new Date(note.created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false}) }}</span>
         <span class="note-content">{{ note.content.substr(0, 81) }}</span>
       </div>
@@ -75,6 +75,7 @@ const latest_event = ref({})  // {kind: event}
 const done = ref(false)
 const bootstrap_only_relays = ref([])
 const notes = ref([])
+const hovered_relay = ref(-1)
 
 // Global but not reactive
 let promises = []
@@ -338,6 +339,14 @@ async function waitForWindowNostr() {
       break
     }
   }
+}
+
+async function dot_hover(idx) {
+  console.log("Hover")
+  hovered_relay.value = idx;
+}
+async function dot_blur() {
+  hovered_relay.value = -1;
 }
 
 onMounted(async () => {

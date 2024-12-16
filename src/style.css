@@ -108,3 +108,25 @@ a {
   color: var(--gray10);
   font-style: italic;
 }
+.boxi {
+  margin: 0.8em 0 0 0.8em;
+  height: 100px;
+  width: 100px;
+  border-top-left-radius: 90%;
+  border-top: 2px solid red;
+  border-left: 2px solid red;
+  border-bottom: 1px solid var(--gray5);
+}
+.note {
+  display: flex;
+}
+.dot {
+  /* TODO horizontal align */
+  width: 1.6em;
+}
+.bold {
+  font-weight: bold;
+}
+.line {
+  display: flex;
+}
