@@ -7,6 +7,7 @@
       <div class="line">
         <span class="item"></span>
         <span class="item">Relay URL</span>
+        <span class="item">Error</span>
         <span class="item">Relay List Event</span>
         <span class="item">Profile</span>
         <span class="item">Follows</span>
@@ -17,6 +18,8 @@
         <div class="item"></div>
         <span class="item relayurl">
           <span :class="{bold: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '')}}</span>
+        </span>
+        <span class="item">
           <span v-if="r.error" class="red">{{ r.error }}</span>
         </span>
 
@@ -438,7 +441,7 @@ onMounted(async () => {
 }
 .line {
   display: grid;
-  grid-template-columns: 100px 1fr 0.3fr 0.3fr 0.3fr 0.3fr;
+  grid-template-columns: 100px 1fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr;
 }
 .item {
   overflow: hidden;
