@@ -18,6 +18,7 @@
         <div class="item"></div>
         <span class="item relayurl">
           <span :class="{bold: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '')}}</span>
+          <span class="yellow">({{ r.note_ids.size }} events)</span>
         </span>
         <span class="item">
           <span v-if="r.error" class="red">{{ r.error }}</span>
@@ -473,5 +474,8 @@ onMounted(async () => {
 }
 .relayurl {
   padding-left: 18px;
+}
+.yellow {
+  color: yellow;
 }
 </style>
