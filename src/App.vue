@@ -7,6 +7,7 @@
       <div class="line">
         <span class="item"></span>
         <span class="item">Relay URL</span>
+        <span class="item">{{ notes.length }} Notes</span>
         <span class="item">Error</span>
         <span class="item">Relay List Event</span>
         <span class="item">Profile</span>
@@ -18,7 +19,9 @@
         <div class="item"></div>
         <span class="item relayurl">
           <span :class="{bold: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '')}}</span>
-          <span class="yellow">({{ r.note_ids.size }} events)</span>
+        </span>
+        <span class="item">
+          ({{ r.note_ids.size }} events)
         </span>
         <span class="item">
           <span v-if="r.error" class="red">{{ r.error }}</span>
@@ -442,7 +445,7 @@ onMounted(async () => {
 }
 .line {
   display: grid;
-  grid-template-columns: 100px 1fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr;
+  grid-template-columns: 100px 1fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr;
 }
 .item {
   overflow: hidden;
@@ -474,8 +477,5 @@ onMounted(async () => {
 }
 .relayurl {
   padding-left: 18px;
-}
-.yellow {
-  color: yellow;
 }
 </style>
