@@ -3,7 +3,7 @@
     <div v-if="!pubkey">Syncronize your events between your relays!</div>
     <button v-if="!pubkey" @click="onLogin">Log in</button>
 
-    <div class="relaygrid" v-if="relays && relays.length">
+    <div class="relaygrid" v-if="relays && relays.length" ref="gridEl">
       <div class="line">
         <span class="item"></span>
         <span class="item">Relay URL</span>
@@ -15,7 +15,7 @@
 
       <div class="line" v-for="r, ridx in relays">
         <div class="item"></div>
-        <span class="item">
+        <span class="item relayurl">
           <span :class="{bold: (hovered_relay == ridx)}">{{r.url}}</span>
           <span v-if="r.error" class="red">{{ r.error }}</span>
         </span>
@@ -50,19 +50,25 @@
       </div>
 
       <div v-for="note in notes" class="note">
-        <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur">
-          o
+        <div class="dots">
+          <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur">
+            o
+          </div>
         </div>
         <span class="note-created-at">{{ (new Date(note.created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false}) }}</span>
         <span class="note-content">{{ note.content.substr(0, 81) }}</span>
       </div>
+
+      <svg v-if="tentacles.length" class="tentacles" :width="svgW" :height="svgH" :viewBox="`0 0 ${svgW} ${svgH}`">
+        <path v-for="(d, idx) in tentacles" :key="idx" :d="d" :class="{thick: idx == hovered_relay}" />
+      </svg>
     </div>
     <button v-if="done" @click="onFix">Fix</button>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { normalizeURL } from 'nostr-tools/utils'
 import { Relay } from 'nostr-tools/relay'
 
@@ -76,6 +82,53 @@ const done = ref(false)
 const bootstrap_only_relays = ref([])
 const notes = ref([])
 const hovered_relay = ref(-1)
+const gridEl = ref(null)
+const tentacles = ref([])  // SVG path strings, one per relay
+const svgW = ref(0)
+const svgH = ref(0)
+
+function redrawTentacles() {
+  const grid = gridEl.value
+  if (!grid || !relays.value) return
+  const gbox = grid.getBoundingClientRect()
+  svgW.value = gbox.width
+  svgH.value = gbox.height
+  const rows = grid.querySelectorAll(':scope > .line')  // first .line is the header
+  const firstNote = grid.querySelector('.note')
+  if (!firstNote) {
+    tentacles.value = []
+    return
+  }
+  const dots = firstNote.querySelectorAll('.dot')
+  const paths = []
+  for (let i = 0; i < relays.value.length; i++) {
+    const row = rows[i + 1]
+    const dot = dots[i]
+    if (!row || !dot) continue
+    const rbox = row.children[1].getBoundingClientRect()
+    const dbox = dot.getBoundingClientRect()
+    const x0 = rbox.left
+    const y0 = rbox.top + rbox.height / 2 - gbox.top
+    const x1 = dbox.left + dbox.width / 2 - gbox.left
+    const y1 = dbox.top - gbox.top + 4
+    const d = `M ${x0} ${y0} C ${x0 + (x1 - x0) * 0.6} ${y0}, ${x1} ${y0 + (y1 - y0) * 0.4}, ${x1} ${y1}`
+    paths.push(d)
+  }
+  tentacles.value = paths
+}
+
+let tentacleObserver = null
+watch(gridEl, (el, oldEl) => {
+  if (oldEl && tentacleObserver) tentacleObserver.unobserve(oldEl)
+  if (el) {
+    if (!tentacleObserver) tentacleObserver = new ResizeObserver(() => redrawTentacles())
+    tentacleObserver.observe(el)
+    nextTick(redrawTentacles)
+  }
+})
+watch(() => [relays.value?.length, notes.value.length], () => nextTick(redrawTentacles))
+
+onUnmounted(() => { tentacleObserver?.disconnect() })
 
 // Global but not reactive
 let promises = []
@@ -365,6 +418,25 @@ onMounted(async () => {
 <style scoped>
 .relaygrid {
   display: grid-inline;
+  position: relative;
+}
+.tentacles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+.tentacles path {
+  fill: none;
+  stroke: var(--purple5);
+  stroke-opacity: 0.45;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  transition: stroke-width 0.15s ease, stroke-opacity 0.15s ease;
+}
+.tentacles path.thick {
+  stroke-width: 4;
+  stroke-opacity: 0.9;
 }
 .line {
   display: grid;
@@ -393,5 +465,9 @@ onMounted(async () => {
 }
 .note-created-at {
   white-space: nowrap;
+  padding-left: 9px;
+}
+.relayurl {
+  padding-left: 9px;
 }
 </style>
