@@ -4,7 +4,7 @@
     <button v-if="!pubkey" @click="onLogin">Log in</button>
 
     <div class="relaygrid" v-if="relays && relays.length" ref="gridEl">
-      <div class="line">
+      <div class="line bold">
         <span class="item"></span>
         <span class="item">Relay URL</span>
         <span class="item">{{ notes.length }} Notes</span>
@@ -24,7 +24,7 @@
           ({{ r.note_ids.size }} events)
         </span>
         <span class="item">
-          <span v-if="r.error" class="red">{{ r.error }}</span>
+          <span v-if="r.error" class="errpill">{{ formatError(r.error) }}</span>
         </span>
 
         <!-- relaylist -->
@@ -200,10 +200,14 @@ function skyLaunch(r, kinds=[10002]) {
     let subparams = {
       onevent: getOnEventFn(r),
       oneose: () => {
-        for (let kind of kinds) {
-          if (!(kind in r.events)) {
-            console.log(`missing kind [${kind}] from`, r.url)
-            r.events[kind] = false
+        // A timed-out connection still produces a synthetic EOSE (from the
+        // eoseTimeout timer); only trust EOSE from a live connection.
+        if (r.relay.connected) {
+          for (let kind of kinds) {
+            if (!(kind in r.events)) {
+              console.log(`missing kind [${kind}] from`, r.url)
+              r.events[kind] = false
+            }
           }
         }
         resolve(r.url)
@@ -410,6 +414,10 @@ async function dot_blur() {
   hovered_relay.value = -1;
 }
 
+function formatError(e) {
+  return String(e).replace(/^relay connection\s*/i, '')
+}
+
 onMounted(async () => {
   console.clear()
   let pk = window.localStorage.getItem('pubkey')
@@ -445,7 +453,7 @@ onMounted(async () => {
 }
 .line {
   display: grid;
-  grid-template-columns: 100px 1fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr;
+  grid-template-columns: 100px 0.2fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr;
 }
 .item {
   overflow: hidden;
@@ -460,6 +468,15 @@ onMounted(async () => {
 }
 .red {
   color: #b00;
+}
+.errpill {
+  display: inline-block;
+  background: #b00;
+  color: #fff;
+  border-radius: 1em;
+  padding: 0 0.6em;
+  font-size: 0.85em;
+  white-space: nowrap;
 }
 .notes {
   display: grid;
