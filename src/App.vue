@@ -1,5 +1,18 @@
 <template>
   <div>
+    <div class="header">
+      <img class="logo" height="100" src="/img/nostropus.png">
+
+      <div class="">
+        <div class="headline">Nostropus</div>
+        <div class="slogan"><span class="our">Optimize your reach</span></div>
+      </div>
+      <div class="flex-space"></div>
+      <div class="fixbox">
+        <span class="fixprogress">{{ fixProgress }}</span>
+      </div>
+    </div>
+
     <div v-if="!pubkey">Syncronize your events between your relays!</div>
     <button v-if="!pubkey" @click="onLogin">Log in</button>
 
@@ -22,6 +35,7 @@
         </span>
         <span class="item">
           ({{ r.note_ids.size }} notes)
+          <button v-if="r.eosed && r.note_ids.size < notes.length" class="fixbtn small ready" :disabled="fixing" @click="onFixEvents(r)"><svg class="fixicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="3.5" y1="20.5" x2="9" y2="15" stroke-width="5"/><line x1="10" y1="14" x2="18" y2="6" stroke-width="2"/><line x1="15.8" y1="3.8" x2="18.2" y2="6.2" stroke-width="2.2"/></svg> fix</button>
         </span>
         <span class="item">
           <span v-if="r.error" class="errpill">{{ formatError(r.error) }}</span>
@@ -68,13 +82,6 @@
         <path v-for="(d, idx) in tentacles" :key="idx" :d="d" :class="{thick: idx == hovered_relay}" />
       </svg>
     </div>
-
-    <Teleport to=".header">
-      <div class="fixbox">
-        <button class="fixbtn" :class="{ready: fixReady}" :disabled="!fixReady || fixing" @click="onFixEvents"><svg class="fixicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="3.5" y1="20.5" x2="9" y2="15" stroke-width="5"/><line x1="10" y1="14" x2="18" y2="6" stroke-width="2"/><line x1="15.8" y1="3.8" x2="18.2" y2="6.2" stroke-width="2.2"/></svg> fix</button>
-        <span class="fixprogress">{{ fixProgress }}</span>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -89,7 +96,6 @@ const relays = ref(null)  // [{url: relayurl, extension: bool, relaylist: bool}]
 const pseen = ref({})  // {relayurl: {profile event}}
 const rseen = ref({})  // {relayurl: {relaylist event}}
 const latest_event = ref({})  // {kind: event}
-const fixReady = ref(false)
 const fixing = ref(false)
 const fixProgress = ref('')
 const bootstrap_only_relays = ref([])
@@ -262,6 +268,7 @@ function fetchNotes(r) {
         }
       },
       oneose: () => {
+        r.eosed = true
         resolve(r.url)
       },
       onclose: (e) => {
@@ -368,43 +375,46 @@ async function onLogin() {
 
   console.log(`Waiting for [${promises.length}] note fetching promises`)
   await Promise.allSettled(promises)
-
-  // All relays have returned with either an EOSE or an error.
-  fixReady.value = true
 }
 
 function displayUrl(url) {
   return url.replace(/^wss?:\/\//, '').replace(/\/$/, '')
 }
 
-async function onFixEvents() {
+async function onFixEvents(r) {
   fixing.value = true
+  const rurl = displayUrl(r.url)
+
+  // Make sure we have a live connection: 3 attempts, 5s timeout each.
+  for (let attempt = 1; !r.relay.connected && attempt <= 3; attempt++) {
+    fixProgress.value = `Connecting to ${rurl}... (${attempt}/3)`
+    r.relay.connectionTimeout = 5000
+    try { await r.relay.connect() } catch (e) { r.error = e }
+  }
+  if (!r.relay.connected) { fixing.value = false; return }  // Unreachable relay, its error pill is already set.
+  r.error = null  // Clear any stale error now that we're connected.
+
+  // Upload the replaceable events, then the missing notes, newest first.
+  // Abort on the first failure, keeping its error in the error column.
   const repl = [[0, 'profile'], [3, 'follows'], [10066, 'blossom'], [10002, 'relay list']]
-  for (let r of relays.value) {
-    const rurl = displayUrl(r.url)
-
-    // Make sure we have a live connection: 3 attempts, 5s timeout each.
-    for (let attempt = 1; !r.relay.connected && attempt <= 3; attempt++) {
-      fixProgress.value = `Connecting to ${rurl}... (${attempt}/3)`
-      r.relay.connectionTimeout = 5000
-      try { await r.relay.connect() } catch (e) { r.error = e }
-    }
-    if (!r.relay.connected) continue  // Unreachable relay, its error pill is already set.
-
-    // Upload the replaceable events, then all notes, newest first.
-    // Abort this relay on the first failure, keeping its error in the error column.
-    let failed = false
-    for (let [kind, label] of repl) {
-      const ev = latest_event.value[kind]
-      if (!ev) continue
-      fixProgress.value = `${rurl}: Uploading ${label} event`
-      try { await r.relay.publish(ev) } catch (e) { r.error = e.message || e; failed = true; break }
-    }
-    if (failed) continue
+  let failed = false
+  for (let [kind, label] of repl) {
+    const ev = latest_event.value[kind]
+    if (!ev) continue
+    fixProgress.value = `${rurl}: Uploading ${label} event`
+    try {
+      await r.relay.publish(ev)
+      r.events[kind] = ev  // The relay now stores this event.
+    } catch (e) { r.error = e.message || e; failed = true; break }
+  }
+  if (!failed) {
     for (let i = 0; i < notes.value.length; i++) {
       if (r.note_ids.has(notes.value[i].id)) continue  // Already stored on this relay.
       fixProgress.value = `${rurl}: uploading note #${i+1}`
-      try { await r.relay.publish(notes.value[i]) } catch (e) { r.error = e.message || e; break }
+      try {
+        await r.relay.publish(notes.value[i])
+        r.note_ids.add(notes.value[i].id)  // The relay now stores this note.
+      } catch (e) { r.error = e.message || e; break }
     }
   }
   fixProgress.value = 'Done.'
@@ -537,6 +547,12 @@ onMounted(async () => {
   background: green;
   color: #fff;
   cursor: pointer;
+}
+.fixbtn.small {
+  font-size: 0.7em;
+  padding: 0.1em 0.5em;
+  margin-left: 0.6em;
+  vertical-align: middle;
 }
 .fixicon {
   width: 1em;
