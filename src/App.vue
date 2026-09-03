@@ -16,7 +16,7 @@
       <div class="line" v-for="r, ridx in relays">
         <div class="item"></div>
         <span class="item relayurl">
-          <span :class="{bold: (hovered_relay == ridx)}">{{r.url}}</span>
+          <span :class="{bold: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '')}}</span>
           <span v-if="r.error" class="red">{{ r.error }}</span>
         </span>
 
