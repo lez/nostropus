@@ -13,7 +13,7 @@
         <span class="item">Blossom</span>
       </div>
 
-      <div class="line" v-for="r, ridx in relays">
+      <div class="line" v-for="r, ridx in relays" @mouseover="dot_hover(ridx)" @mouseleave="dot_blur">
         <div class="item"></div>
         <span class="item relayurl">
           <span :class="{bold: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '')}}</span>
