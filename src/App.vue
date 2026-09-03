@@ -68,7 +68,13 @@
         <path v-for="(d, idx) in tentacles" :key="idx" :d="d" :class="{thick: idx == hovered_relay}" />
       </svg>
     </div>
-    <button v-if="done" @click="onFix">Fix</button>
+
+    <Teleport to=".header">
+      <div class="fixbox">
+        <button class="fixbtn" :class="{ready: fixReady}" :disabled="!fixReady || fixing" @click="onFixEvents"><svg class="fixicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="3.5" y1="20.5" x2="9" y2="15" stroke-width="5"/><line x1="10" y1="14" x2="18" y2="6" stroke-width="2"/><line x1="15.8" y1="3.8" x2="18.2" y2="6.2" stroke-width="2.2"/></svg> fix</button>
+        <span class="fixprogress">{{ fixProgress }}</span>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -83,7 +89,9 @@ const relays = ref(null)  // [{url: relayurl, extension: bool, relaylist: bool}]
 const pseen = ref({})  // {relayurl: {profile event}}
 const rseen = ref({})  // {relayurl: {relaylist event}}
 const latest_event = ref({})  // {kind: event}
-const done = ref(false)
+const fixReady = ref(false)
+const fixing = ref(false)
+const fixProgress = ref('')
 const bootstrap_only_relays = ref([])
 const notes = ref([])
 const hovered_relay = ref(-1)
@@ -253,6 +261,9 @@ function fetchNotes(r) {
           notes.value.sort((a, b) => {if (a.created_at > b.created_at) return -1; if (a.created_at < b.created_at) return 1; return 0})
         }
       },
+      oneose: () => {
+        resolve(r.url)
+      },
       onclose: (e) => {
         //WE_ARE_HERE: what to do here? All oncloses should be disabled when data was fetched from relays.
         r.error = e
@@ -357,41 +368,47 @@ async function onLogin() {
 
   console.log(`Waiting for [${promises.length}] note fetching promises`)
   await Promise.allSettled(promises)
+
+  // All relays have returned with either an EOSE or an error.
+  fixReady.value = true
 }
 
-async function onFix() {
-  console.log("> onFix")
-  let event = relaylists[relaylist_latest_id]
-  console.log("The proper relaylist is", event)
-  let rfixlist = []
-  for (let r of relays.value) {
-    if (!r.userlist) continue
-    if (rseen.value[r.url]?.created_at === relaylist_latest.value) continue
-    rfixlist.push(r.url)
-  }
-  if (rfixlist.length) {
-    console.log("The lagging relays are", rfixlist)
-    await Promise.all(pool.publish(rfixlist, event))
-    console.log("Fixed relaylists")
-  } else {
-    console.log("Relay lists are fine")
-  }
+function displayUrl(url) {
+  return url.replace(/^wss?:\/\//, '').replace(/\/$/, '')
+}
 
-  let profile = profiles[profile_latest_id]
-  console.log("The proper profile is", profile)
-  let pfixlist = []
+async function onFixEvents() {
+  fixing.value = true
+  const repl = [[0, 'profile'], [3, 'follows'], [10066, 'blossom'], [10002, 'relay list']]
   for (let r of relays.value) {
-    if (!r.userlist) continue
-    if (pseen.value[r.url]?.created_at === profile_latest.value) continue
-    pfixlist.push(r.url)
+    const rurl = displayUrl(r.url)
+
+    // Make sure we have a live connection: 3 attempts, 5s timeout each.
+    for (let attempt = 1; !r.relay.connected && attempt <= 3; attempt++) {
+      fixProgress.value = `Connecting to ${rurl}... (${attempt}/3)`
+      r.relay.connectionTimeout = 5000
+      try { await r.relay.connect() } catch (e) { r.error = e }
+    }
+    if (!r.relay.connected) continue  // Unreachable relay, its error pill is already set.
+
+    // Upload the replaceable events, then all notes, newest first.
+    // Abort this relay on the first failure, keeping its error in the error column.
+    let failed = false
+    for (let [kind, label] of repl) {
+      const ev = latest_event.value[kind]
+      if (!ev) continue
+      fixProgress.value = `${rurl}: Uploading ${label} event`
+      try { await r.relay.publish(ev) } catch (e) { r.error = e.message || e; failed = true; break }
+    }
+    if (failed) continue
+    for (let i = 0; i < notes.value.length; i++) {
+      if (r.note_ids.has(notes.value[i].id)) continue  // Already stored on this relay.
+      fixProgress.value = `${rurl}: uploading note #${i+1}`
+      try { await r.relay.publish(notes.value[i]) } catch (e) { r.error = e.message || e; break }
+    }
   }
-  if (pfixlist.length) {
-    console.log("Profile is missing from relays", pfixlist)
-    await Promise.all(pool.publish(pfixlist, profile))
-    console.log("Fixed profiles")
-  } else {
-    console.log("Profiles are fine")
-  }
+  fixProgress.value = 'Done.'
+  fixing.value = false
 }
 
 async function waitForWindowNostr() {
@@ -500,5 +517,34 @@ onMounted(async () => {
 }
 .relayurl {
   padding-left: 18px;
+}
+.fixbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  align-self: center;
+}
+.fixbtn {
+  font-size: 1.3em;
+  padding: 0.3em 0.9em;
+  border: none;
+  border-radius: 8px;
+  background: var(--gray5);
+  color: var(--gray14);
+  cursor: not-allowed;
+}
+.fixbtn.ready {
+  background: green;
+  color: #fff;
+  cursor: pointer;
+}
+.fixicon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.12em;
+}
+.fixprogress {
+  color: var(--purple5);
+  white-space: nowrap;
 }
 </style>
