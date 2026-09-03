@@ -15,7 +15,7 @@
         <span class="item">Blossom</span>
       </div>
 
-      <div class="line" v-for="r, ridx in relays" @mouseover="dot_hover(ridx)" @mouseleave="dot_blur">
+      <div class="line relayline" v-for="r, ridx in relays" @mouseover="dot_hover(ridx)" @mouseleave="dot_blur">
         <div class="item"></div>
         <span class="item relayurl">
           <span :class="{bold: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '').replace(/\/$/, '')}}</span>
@@ -454,6 +454,12 @@ onMounted(async () => {
 .line {
   display: grid;
   grid-template-columns: 100px 0.2fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr;
+}
+.relayline > .item {
+  transition: background 0.15s ease;
+}
+.relayline:hover > .item:not(:first-child) {
+  background: var(--purple2);
 }
 .item {
   overflow: hidden;
