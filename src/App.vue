@@ -18,10 +18,10 @@
       <div class="line" v-for="r, ridx in relays" @mouseover="dot_hover(ridx)" @mouseleave="dot_blur">
         <div class="item"></div>
         <span class="item relayurl">
-          <span :class="{bold: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '')}}</span>
+          <span :class="{bold: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '').replace(/\/$/, '')}}</span>
         </span>
         <span class="item">
-          ({{ r.note_ids.size }} events)
+          ({{ r.note_ids.size }} notes)
         </span>
         <span class="item">
           <span v-if="r.error" class="errpill">{{ formatError(r.error) }}</span>
@@ -58,7 +58,7 @@
 
       <div v-for="note in notes" class="note">
         <div class="dots">
-          <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur"></div>
+          <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), hollow: r.unreachable && !r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur"></div>
         </div>
         <span class="note-created-at">{{ (new Date(note.created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false}) }}</span>
         <span class="note-content">{{ note.content.substr(0, 81) }}</span>
@@ -227,7 +227,7 @@ function skyLaunch(r, kinds=[10002]) {
         // console.log("relay connected", r.url)
         r.relay.subscribe([{authors: [pk], kinds}], subparams)
       })
-      .catch(e => {console.log('connect error', e); r.error = e; reject(e)})
+      .catch(e => {console.log('connect error', e); r.error = e; r.unreachable = true; reject(e)})
     } else {
       console.log("Sending new sub to", r.url, kinds)
       r.relay.subscribe([{authors: [pk], kinds}], subparams)

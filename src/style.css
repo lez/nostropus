@@ -133,6 +133,10 @@ a {
 .dot.green::after {
   background: green;
 }
+.dot.hollow::after {
+  background: transparent;
+  border: 2px solid #b00;
+}
 .bold {
   font-weight: bold;
 }
