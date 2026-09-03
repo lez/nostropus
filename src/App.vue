@@ -9,10 +9,10 @@
         <span class="item">Relay URL</span>
         <span class="item">{{ notes.length }} Notes</span>
         <span class="item">Error</span>
-        <span class="item">Relay List Event</span>
-        <span class="item">Profile</span>
-        <span class="item">Follows</span>
-        <span class="item">Blossom</span>
+        <span class="item" title="kind 10002">Relay List Event</span>
+        <span class="item" title="kind 0">Profile</span>
+        <span class="item" title="kind 3">Follows</span>
+        <span class="item" title="kind 10066">Blossom</span>
       </div>
 
       <div class="line relayline" v-for="r, ridx in relays" @mouseover="dot_hover(ridx)" @mouseleave="dot_blur">
