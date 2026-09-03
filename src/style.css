@@ -117,8 +117,21 @@ a {
   display: flex;
 }
 .dot {
-  /* TODO horizontal align */
   width: 1.6em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dot::after {
+  content: '';
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  background: #b00;
+  transition: transform 0.15s ease;
+}
+.dot.green::after {
+  background: green;
 }
 .bold {
   font-weight: bold;

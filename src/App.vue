@@ -51,9 +51,7 @@
 
       <div v-for="note in notes" class="note">
         <div class="dots">
-          <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur">
-            o
-          </div>
+          <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur"></div>
         </div>
         <span class="note-created-at">{{ (new Date(note.created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false}) }}</span>
         <span class="note-content">{{ note.content.substr(0, 81) }}</span>
@@ -450,6 +448,9 @@ onMounted(async () => {
 .green {
   color: green;
 }
+.dot.bold::after {
+  transform: scale(1.4);
+}
 .red {
   color: #b00;
 }
@@ -468,6 +469,6 @@ onMounted(async () => {
   padding-left: 9px;
 }
 .relayurl {
-  padding-left: 9px;
+  padding-left: 18px;
 }
 </style>
