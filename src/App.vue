@@ -222,7 +222,7 @@ async function onLogin() {
     console.log(rlist)
 
     // TODO: Differentiate read and write relays.
-    relays.value = Object.keys(rlist).map(
+    relays.value = Object.keys(rlist || {}).map(
       function(r) {
         return {
           url: normalizeURL(r),
@@ -233,7 +233,10 @@ async function onLogin() {
         }
       }
     )
-  } else {
+  }
+
+  if (!relays.value?.length) {
+    // Extension provided no relays, bootstrap with default relays.
     relays.value = [
       {url: "wss://purplepag.es/", extension: true, userlist: false, events: {}, note_ids: new Set()},
       {url: "wss://nos.lol/", extension: true, userlist: false, events: {}, note_ids: new Set()},
