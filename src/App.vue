@@ -35,7 +35,7 @@
         </span>
         <span class="item">
           ({{ r.note_ids.size }} notes)
-          <button v-if="r.eosed && r.note_ids.size < notes.length" class="fixbtn small ready" :disabled="fixing" @click="onFixEvents(r)"><svg class="fixicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="3.5" y1="20.5" x2="9" y2="15" stroke-width="5"/><line x1="10" y1="14" x2="18" y2="6" stroke-width="2"/><line x1="15.8" y1="3.8" x2="18.2" y2="6.2" stroke-width="2.2"/></svg> fix</button>
+          <button v-if="fixReady && r.eosed && r.note_ids.size < notes.length" class="fixbtn small ready" :disabled="fixing" @click="onFixEvents(r)"><svg class="fixicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="3.5" y1="20.5" x2="9" y2="15" stroke-width="5"/><line x1="10" y1="14" x2="18" y2="6" stroke-width="2"/><line x1="15.8" y1="3.8" x2="18.2" y2="6.2" stroke-width="2.2"/></svg> fix</button>
         </span>
         <span class="item">
           <span v-if="r.error" class="errpill">{{ formatError(r.error) }}</span>
@@ -96,6 +96,7 @@ const relays = ref(null)  // [{url: relayurl, extension: bool, relaylist: bool}]
 const pseen = ref({})  // {relayurl: {profile event}}
 const rseen = ref({})  // {relayurl: {relaylist event}}
 const latest_event = ref({})  // {kind: event}
+const fixReady = ref(false)
 const fixing = ref(false)
 const fixProgress = ref('')
 const bootstrap_only_relays = ref([])
@@ -268,7 +269,9 @@ function fetchNotes(r) {
         }
       },
       oneose: () => {
-        r.eosed = true
+        if (r.relay.connected) {
+          r.eosed = true
+        }
         resolve(r.url)
       },
       onclose: (e) => {
@@ -328,7 +331,16 @@ async function onLogin() {
     promises.push(skyLaunch(r))
   }
 
+  if (promises.length === 0) {
+    alert("Could not find a relay list for npub")
+  }
+
   while (true) {
+    // Iteration for the following edge case:
+    // * purplepag.es has a relay list with created_at=x
+    // * one of the relays in the list has a relay list event with created_at=x+1
+    // * the new relay list has a relay with a relay list event whose created_at=x+2
+    // * and so on...
     console.log(`Waiting for [${promises.length}] promises`)
     await Promise.allSettled(promises)
     // Move 10002 relays up the list.
@@ -375,6 +387,9 @@ async function onLogin() {
 
   console.log(`Waiting for [${promises.length}] note fetching promises`)
   await Promise.allSettled(promises)
+
+  // All fetchNotes promises have settled, fix buttons may appear now.
+  fixReady.value = true
 }
 
 function displayUrl(url) {
@@ -385,11 +400,17 @@ async function onFixEvents(r) {
   fixing.value = true
   const rurl = displayUrl(r.url)
 
-  // Make sure we have a live connection: 3 attempts, 5s timeout each.
+  // Make sure we have a live connection: 3 attempts, 5s timeout each,
+  // with at least 5 seconds between two attempts.
   for (let attempt = 1; !r.relay.connected && attempt <= 3; attempt++) {
     fixProgress.value = `Connecting to ${rurl}... (${attempt}/3)`
     r.relay.connectionTimeout = 5000
+    const started = Date.now()
     try { await r.relay.connect() } catch (e) { r.error = e }
+    const elapsed = Date.now() - started
+    if (!r.relay.connected && attempt < 3 && elapsed < 5000) {
+      await new Promise(res => setTimeout(res, 5000 - elapsed))
+    }
   }
   if (!r.relay.connected) { fixing.value = false; return }  // Unreachable relay, its error pill is already set.
   r.error = null  // Clear any stale error now that we're connected.
