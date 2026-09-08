@@ -9,7 +9,7 @@
       </div>
       <div class="flex-space"></div>
       <div class="fixbox">
-        <span class="fixprogress">{{ fixProgress }}</span>
+        <span></span>
       </div>
     </div>
 
@@ -38,7 +38,9 @@
           <button v-if="fixReady && r.eosed && r.note_ids.size < notes.length" class="fixbtn small ready" :disabled="fixing" @click="onFixEvents(r)"><svg class="fixicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="3.5" y1="20.5" x2="9" y2="15" stroke-width="5"/><line x1="10" y1="14" x2="18" y2="6" stroke-width="2"/><line x1="15.8" y1="3.8" x2="18.2" y2="6.2" stroke-width="2.2"/></svg> fix</button>
         </span>
         <span class="item">
-          <span v-if="r.error" class="errpill">{{ formatError(r.error) }}</span>
+          <span v-if="r.error" class="errpill" :title="String(r.error)">{{ formatError(r.error) }}</span>
+          <a v-if="r.error" class="retrylink" :class="{disabled: r.retrying}" @click="onRetry(r)">{{ r.retrying ? 'retrying...' : 'retry' }}</a>
+          <span v-if="r.progress" class="relayprogress">{{ r.progress }}</span>
         </span>
 
         <!-- relaylist -->
@@ -72,7 +74,7 @@
 
       <div v-for="note in notes" class="note">
         <div class="dots">
-          <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), hollow: r.unreachable && !r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur"></div>
+          <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), yellow: r.limited_note_id == note.id, hollow: r.unreachable && !r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur"></div>
         </div>
         <span class="note-created-at">{{ (new Date(note.created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false}) }}</span>
         <span class="note-content">{{ note.content.substr(0, 81) }}</span>
@@ -98,7 +100,6 @@ const rseen = ref({})  // {relayurl: {relaylist event}}
 const latest_event = ref({})  // {kind: event}
 const fixReady = ref(false)
 const fixing = ref(false)
-const fixProgress = ref('')
 const bootstrap_only_relays = ref([])
 const notes = ref([])
 const hovered_relay = ref(-1)
@@ -236,13 +237,12 @@ function skyLaunch(r, kinds=[10002]) {
 
     if (!r.relay) {
       r.relay = new Relay(r.url)
-      r.relay.connectionTimeout = 2000 // Be strict on first round, retry button will be softer
       console.log(`Connecting to [${r.url}]`)
-      r.relay.connect().then(() => {
+      connectRelay(r, 2000).then(connected => {  // Be strict on first round, the retry button is softer
+        if (!connected) { reject('websocket error'); return }
         // console.log("relay connected", r.url)
         r.relay.subscribe([{authors: [pk], kinds}], subparams)
       })
-      .catch(e => {console.log('connect error', e); r.error = e; r.unreachable = true; reject(e)})
     } else {
       console.log("Sending new sub to", r.url, kinds)
       r.relay.subscribe([{authors: [pk], kinds}], subparams)
@@ -396,15 +396,14 @@ function displayUrl(url) {
   return url.replace(/^wss?:\/\//, '').replace(/\/$/, '')
 }
 
-async function onFixEvents(r) {
-  fixing.value = true
-  const rurl = displayUrl(r.url)
-
-  // Make sure we have a live connection: 3 attempts, 5s timeout each,
-  // with at least 5 seconds between two attempts.
+// Connect to a relay: up to 3 attempts with the given per-attempt timeout,
+// and at least 5 seconds between two attempts. Progress is shown in the
+// relay's Error column as 'Connecting... (n/3)'. Returns whether it is now
+// connected; on failure r.error and r.unreachable are set.
+async function connectRelay(r, timeout = 5000) {
   for (let attempt = 1; !r.relay.connected && attempt <= 3; attempt++) {
-    fixProgress.value = `Connecting to ${rurl}... (${attempt}/3)`
-    r.relay.connectionTimeout = 5000
+    r.progress = `Connecting... (${attempt}/3)`
+    r.relay.connectionTimeout = timeout
     const started = Date.now()
     try { await r.relay.connect() } catch (e) { r.error = e }
     const elapsed = Date.now() - started
@@ -412,33 +411,88 @@ async function onFixEvents(r) {
       await new Promise(res => setTimeout(res, 5000 - elapsed))
     }
   }
-  if (!r.relay.connected) { fixing.value = false; return }  // Unreachable relay, its error pill is already set.
+  if (!r.relay.connected) r.unreachable = true
+  r.progress = ''
+  return r.relay.connected
+}
+
+async function onRetry(r) {
+  // Retry the initial connection to this relay, then re-fetch everything.
+  if (r.retrying) return
+  r.retrying = true
+  try { await r.relay.connect() } catch (e) { r.error = e; r.retrying = false; return }
+
+  // Connected now: clear the error, then fetch the replaceable kinds and the notes again.
+  r.error = null
+  r.unreachable = false
+  try { await skyLaunch(r, [0, 3, 10002, 10066]) } catch (e) { console.log('retry skyLaunch rejected', e) }
+  try { await fetchNotes(r) } catch (e) { console.log('retry fetchNotes rejected', e) }
+  r.retrying = false
+}
+
+async function publishOne(r, ev, label) {
+  r.progress = label
+  await r.relay.publish(ev)
+  if (ev.kind === 1) r.note_ids.add(ev.id)  // The relay now stores this note.
+  else r.events[ev.kind] = ev               // The relay now stores this event.
+}
+
+async function onFixEvents(r) {
+  fixing.value = true
+  r.fixurl = displayUrl(r.url)
+
+  // Make sure we have a live connection (3 attempts, 5s timeout each).
+  if (!await connectRelay(r)) { fixing.value = false; return }
   r.error = null  // Clear any stale error now that we're connected.
 
   // Upload the replaceable events, then the missing notes, newest first.
-  // Abort on the first failure, keeping its error in the error column.
   const repl = [[0, 'profile'], [3, 'follows'], [10066, 'blossom'], [10002, 'relay list']]
-  let failed = false
+  const queue = []
   for (let [kind, label] of repl) {
     const ev = latest_event.value[kind]
-    if (!ev) continue
-    fixProgress.value = `${rurl}: Uploading ${label} event`
-    try {
-      await r.relay.publish(ev)
-      r.events[kind] = ev  // The relay now stores this event.
-    } catch (e) { r.error = e.message || e; failed = true; break }
+    if (ev) queue.push({ev, label: `Uploading ${label} event`})
   }
-  if (!failed) {
-    for (let i = 0; i < notes.value.length; i++) {
-      if (r.note_ids.has(notes.value[i].id)) continue  // Already stored on this relay.
-      fixProgress.value = `${rurl}: uploading note #${i+1}`
-      try {
-        await r.relay.publish(notes.value[i])
-        r.note_ids.add(notes.value[i].id)  // The relay now stores this note.
-      } catch (e) { r.error = e.message || e; break }
+  notes.value.forEach((note, i) => {
+    if (!r.note_ids.has(note.id)) queue.push({ev: note, label: `uploading note #${i+1}`})  // Skip notes already stored there.
+  })
+
+  let uploaded = 0
+  let start = Date.now()
+  let lastUpload = 0
+  // Upload loop: process events in order. A 'rate-limited' rejection is
+  // related to the connection, not the event, so the same event is retried
+  // after a cooldown of (elapsed / uploaded) — the observed upload rate,
+  // and at least 10 seconds after the failed upload attempt.
+  // 'publish timed out' errors belong to the same class: the relay may just
+  // be slow to answer. Both are retried indefinitely; any other error
+  // aborts this relay.
+  let i = 0
+  while (i < queue.length) {
+    const {ev, label} = queue[i]
+    lastUpload = Date.now()
+    try {
+      await publishOne(r, ev, label)
+      uploaded++
+      r.limited_note_id = null
+      i++
+    } catch (e) {
+      const msg = String(e.message || e)
+      const rateLimited = msg.includes('rate-limited')
+      if (!rateLimited && !msg.includes('publish timed out')) {
+        r.error = msg  // Non-recoverable error: abort this relay.
+        break
+      }
+      r.limited_note_id = ev.kind === 1 ? ev.id : null  // Show the note's dot in yellow.
+      const dt = (Date.now() - start) / Math.max(uploaded, 1)
+      r.progress = `${rateLimited ? 'rate limited' : 'publish timed out'}, waiting`
+      await new Promise(res => setTimeout(res, dt))
+      // At least 10 seconds between the failed upload and the retry.
+      const gap = Date.now() - lastUpload
+      if (gap < 10000) await new Promise(res => setTimeout(res, 10000 - gap))
     }
   }
-  fixProgress.value = 'Done.'
+  r.limited_note_id = null
+  r.progress = 'Done.'
   fixing.value = false
 }
 
@@ -463,7 +517,9 @@ async function dot_blur() {
 }
 
 function formatError(e) {
-  return String(e).replace(/^relay connection\s*/i, '')
+  const msg = String(e)
+  if (msg.includes('rate-limited')) return 'rate limited'
+  return msg.replace(/^relay connection\s*/i, '')
 }
 
 onMounted(async () => {
@@ -501,7 +557,7 @@ onMounted(async () => {
 }
 .line {
   display: grid;
-  grid-template-columns: 100px 0.2fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr;
+  grid-template-columns: 100px auto 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr;
 }
 .relayline > .item {
   transition: background 0.15s ease;
@@ -529,6 +585,24 @@ onMounted(async () => {
   color: #fff;
   border-radius: 1em;
   padding: 0 0.6em;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.retrylink {
+  color: var(--purple5);
+  text-decoration: underline;
+  cursor: pointer;
+  padding-left: 0.5em;
+  font-size: 0.85em;
+}
+.retrylink.disabled {
+  text-decoration: none;
+  cursor: default;
+  opacity: 0.6;
+}
+.relayprogress {  /* Progress text of a running fix, shown as-is in the Error column. */
+  color: #777;
+  padding-left: 0.5em;
   font-size: 0.85em;
   white-space: nowrap;
 }
