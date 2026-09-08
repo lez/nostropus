@@ -17,60 +17,65 @@
     <button v-if="!pubkey" @click="onLogin">Log in</button>
 
     <div class="relaygrid" v-if="relays && relays.length" ref="gridEl">
-      <div class="line bold">
-        <span class="item"></span>
-        <span class="item">Relay URL</span>
-        <span class="item">{{ notes.length }} Notes</span>
-        <span class="item">Error</span>
-        <span class="item" title="kind 10002">Relay List Event</span>
-        <span class="item" title="kind 0">Profile</span>
-        <span class="item" title="kind 3">Follows</span>
-        <span class="item" title="kind 10066">Blossom</span>
-      </div>
+      <table class="relaytable">
+        <thead>
+          <tr class="bold">
+            <th class="tentaclecol"></th>
+            <th>Relay</th>
+            <th>Notes</th>
+            <th>Status</th>
+            <th title="kind 10002">Relay List</th>
+            <th title="kind 0">Profile</th>
+            <th title="kind 3">Follows</th>
+            <th title="kind 10066">Blossom</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="relayline" v-for="r, ridx in relays" @mouseover="dot_hover(ridx)" @mouseleave="dot_blur">
+            <td class="tentacles"></td>
+            <td class="relayurl">
+              <span :class="{bold: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '').replace(/\/$/, '')}}</span>
+            </td>
+            <td>
+              <span v-if="r.note_ids.size > 0" :class="{green: r.eosed && r.note_ids.size == notes.length, yellow: r.eosed && r.note_ids.size < notes.length}">{{ r.note_ids.size }}</span>
+              <button v-if="fixReady && r.eosed && r.note_ids.size < notes.length" class="fixbtn small ready" :disabled="fixing" @click="onFixEvents(r)"><svg class="fixicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="3.5" y1="20.5" x2="9" y2="15" stroke-width="5"/><line x1="10" y1="14" x2="18" y2="6" stroke-width="2"/><line x1="15.8" y1="3.8" x2="18.2" y2="6.2" stroke-width="2.2"/></svg> fix</button>
+            </td>
+            <td>
+              <span v-if="r.error" class="errpill" :title="String(r.error)">{{ formatError(r.error) }}</span>
+              <a v-if="r.error" class="retrylink" :class="{disabled: r.retrying}" @click="onRetry(r)">{{ r.retrying ? 'retrying...' : 'retry' }}</a>
+              <span v-if="r.progress" class="relayprogress">{{ r.progress }}</span>
+            </td>
 
-      <div class="line relayline" v-for="r, ridx in relays" @mouseover="dot_hover(ridx)" @mouseleave="dot_blur">
-        <div class="item"></div>
-        <span class="item relayurl">
-          <span :class="{bold: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '').replace(/\/$/, '')}}</span>
-        </span>
-        <span class="item">
-          ({{ r.note_ids.size }} notes)
-          <button v-if="fixReady && r.eosed && r.note_ids.size < notes.length" class="fixbtn small ready" :disabled="fixing" @click="onFixEvents(r)"><svg class="fixicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="3.5" y1="20.5" x2="9" y2="15" stroke-width="5"/><line x1="10" y1="14" x2="18" y2="6" stroke-width="2"/><line x1="15.8" y1="3.8" x2="18.2" y2="6.2" stroke-width="2.2"/></svg> fix</button>
-        </span>
-        <span class="item">
-          <span v-if="r.error" class="errpill" :title="String(r.error)">{{ formatError(r.error) }}</span>
-          <a v-if="r.error" class="retrylink" :class="{disabled: r.retrying}" @click="onRetry(r)">{{ r.retrying ? 'retrying...' : 'retry' }}</a>
-          <span v-if="r.progress" class="relayprogress">{{ r.progress }}</span>
-        </span>
+            <!-- relaylist -->
+            <td>
+              <div v-if="r.events[10002]" :class="{green: r.events[10002].id == latest_event[10002].id}">{{(new Date(r.events[10002].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
+              </div>
+              <div v-if="10002 in r.events && !r.events[10002]" class="red">event not found</div>
+            </td>
 
-        <!-- relaylist -->
-        <span class="item">
-          <div v-if="r.events[10002]" :class="{green: r.events[10002].id == latest_event[10002].id}">{{(new Date(r.events[10002].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
-          </div>
-          <div v-if="10002 in r.events && !r.events[10002]" class="red">event not found</div>
-        </span>
+            <!-- profile -->
+            <td>
+              <div v-if="r.events[0]" :class="{green: r.events[0].id == latest_event[0].id}">{{(new Date(r.events[0].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
+              </div>
+              <div v-if="0 in r.events && !r.events[0]" class="red">event not found</div>
+            </td>
 
-        <!-- profile -->
-        <span class="item">
-          <div v-if="r.events[0]" :class="{green: r.events[0].id == latest_event[0].id}">{{(new Date(r.events[0].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
-          </div>
-          <div v-if="0 in r.events && !r.events[0]" class="red">event not found</div>
-        </span>
+            <!-- Follows -->
+            <td>
+              <div v-if="r.events[3]" :class="{green: r.events[3].id == latest_event[3].id}">{{(new Date(r.events[3].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
+              </div>
+              <div v-if="3 in r.events && !r.events[3]" class="red">event not found</div>
+            </td>
 
-        <!-- Follows -->
-        <span class="item">
-          <div v-if="r.events[3]" :class="{green: r.events[3].id == latest_event[3].id}">{{(new Date(r.events[3].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
-          </div>
-          <div v-if="3 in r.events && !r.events[3]" class="red">event not found</div>
-        </span>
-
-        <!-- Blossom -->
-        <span class="item">
-          <div v-if="r.events[10066]" :class="{green: r.events[10066].id == latest_event[10066].id}">{{(new Date(r.events[10066].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
-          </div>
-          <div v-if="10066 in r.events && !r.events[10066]" class="red">event not found</div>
-        </span>
-      </div>
+            <!-- Blossom -->
+            <td>
+              <div v-if="r.events[10066]" :class="{green: r.events[10066].id == latest_event[10066].id}">{{(new Date(r.events[10066].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
+              </div>
+              <div v-if="10066 in r.events && !r.events[10066]" class="red">event not found</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
       <div v-for="note in notes" class="note">
         <div class="dots">
@@ -114,7 +119,7 @@ function redrawTentacles() {
   const gbox = grid.getBoundingClientRect()
   svgW.value = gbox.width
   svgH.value = gbox.height
-  const rows = grid.querySelectorAll(':scope > .line')  // first .line is the header
+  const rows = grid.querySelectorAll('.relaytable tbody tr.relayline')
   const firstNote = grid.querySelector('.note')
   if (!firstNote) {
     tentacles.value = []
@@ -123,12 +128,12 @@ function redrawTentacles() {
   const dots = firstNote.querySelectorAll('.dot')
   const paths = []
   for (let i = 0; i < relays.value.length; i++) {
-    const row = rows[i + 1]
+    const row = rows[i]
     const dot = dots[i]
     if (!row || !dot) continue
     const rbox = row.children[1].getBoundingClientRect()
     const dbox = dot.getBoundingClientRect()
-    const x0 = rbox.left
+    const x0 = rbox.left - gbox.left
     const y0 = rbox.top + rbox.height / 2 - gbox.top
     const x1 = dbox.left + dbox.width / 2 - gbox.left
     const y1 = dbox.top - gbox.top + 4
@@ -534,7 +539,7 @@ onMounted(async () => {
 
 <style scoped>
 .relaygrid {
-  display: grid-inline;
+  display: grid;
   position: relative;
 }
 .tentacles {
@@ -555,23 +560,38 @@ onMounted(async () => {
   stroke-width: 4;
   stroke-opacity: 0.9;
 }
-.line {
-  display: grid;
-  grid-template-columns: 100px auto 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr 0.3fr;
+.relaytable {
+  width: 100%;
+  border-collapse: collapse;
 }
-.relayline > .item {
-  transition: background 0.15s ease;
-}
-.relayline:hover > .item:not(:first-child) {
-  background: var(--purple2);
-}
-.item {
+.relaytable th, .relaytable td {
+  text-align: left;
+  padding: 0 8px 0 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.relaytable th.tentaclecol, .relaytable td:first-child {
+  width: 100px;  /* Same width as the dots column in the note grid. */
+  min-width: 100px;
+}
+.relayline > td {
+  transition: background 0.15s ease;
+}
+.relayline:hover > td:not(:first-child) {
+  background: var(--purple2);
+}
+.item {  /* still used by note-row elements */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
 .green {
   color: green;
+}
+.yellow {
+  color: goldenrod;
 }
 .dot.bold::after {
   transform: scale(1.4);

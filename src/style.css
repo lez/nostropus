@@ -47,7 +47,7 @@ a {
   display: flex;
   justify-content: space-between;
   max-width: 960px;
-  margin: 32px auto 0 auto;
+  margin: 32px 0 0 0;
 }
 .logo {
   max-height: 150px;
@@ -110,8 +110,7 @@ a {
 }
 .note {
   display: grid;
-  grid-template-columns: 100px 0.3fr 1fr;
-  padding-left: 9px;
+  grid-template-columns: 100px max-content 0.3fr;
 }
 .dots {
   display: flex;
