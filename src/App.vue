@@ -260,8 +260,25 @@ function fetchNotes(r) {
     console.assert(r.events)  // It should be set to {}.
     console.assert(r.note_ids)  // It should be set to Set().
 
+    // External idle-based EOSE: nostr-tools' built-in fallback fires 4.4s
+    // after subscribe even if events are still streaming. Override it to 10
+    // minutes as a mere safety net and run our own 4.4s idle timer that is
+    // reset on every received event. 4.4s of silence → treat as EOSE.
+    let idleTimer = null
+    const idleEose = () => {
+      if (r.relay.connected) {
+        r.eosed = true
+      }
+      resolve(r.url)  // no-op if already settled by a real EOSE or close
+    }
+    const bump = () => {
+      clearTimeout(idleTimer)
+      idleTimer = setTimeout(idleEose, 4400)
+    }
+
     let subparams = {
       onevent: (e) => {
+        bump()  // Reset the idle timer on each received event.
         console.log('onevent', e.id)
         r.note_ids.add(e.id)
         if (note_ids.has(e.id)) {
@@ -274,6 +291,7 @@ function fetchNotes(r) {
         }
       },
       oneose: () => {
+        clearTimeout(idleTimer)  // Real EOSE wins over the idle guess.
         if (r.relay.connected) {
           r.eosed = true
         }
@@ -281,13 +299,16 @@ function fetchNotes(r) {
       },
       onclose: (e) => {
         //WE_ARE_HERE: what to do here? All oncloses should be disabled when data was fetched from relays.
+        clearTimeout(idleTimer)
         r.error = e
         console.log(r.url, "subscription closed", e)
         reject(e)
-      }
+      },
+      eoseTimeout: 10 * 60 * 1000  // 10-minute nostr-tools fallback; the idle timer is the real EOSE.
     }
 
     console.log("Fetching notest from ", r.url)
+    bump()  // Arm the idle timer: 4.4s of silence from now counts as EOSE.
     r.relay.subscribe([{authors: [pk], kinds: [1]}], subparams)
   })
 }
