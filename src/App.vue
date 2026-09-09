@@ -161,6 +161,20 @@ let promises = []
 let newpromises = [] // temporary list to be added to promises
 let note_ids = new Set()
 let pk = null
+let breakFirstRound = false  // set when a 10002 event covers all its referenced relays
+
+function checkBreak(event) {
+  // Every relay referenced by this event's 'r' tags must already have
+  // given us a 10002 event (truthy, i.e. not `false`/`undefined`).
+  for (const t of event.tags) {
+    if (t[0] !== 'r') continue
+    let url = t[1]
+    try { url = normalizeURL(t[1]) } catch { /* fall back to raw */ }
+    const found = relays.value.find(r => r.url === url)
+    if (!found || !found.events?.[10002]) return false
+  }
+  return true
+}
 
 function trackLatest(event, relay_url="some relay") {
   if ((latest_event.value[event.kind]?.created_at || 0) < event.created_at) {
@@ -183,6 +197,10 @@ function getOnEventFn(relay) {
 
       case 10002:
         relay.events[10002] = event
+        if (!breakFirstRound && latest_event.value[10002] && checkBreak(latest_event.value[10002])) {
+          breakFirstRound = true
+          console.log('10002 coverage complete - skipping the rest of round one')
+        }
         if (trackLatest(event, relay.url)) {
           for (let t of event.tags) {
             // console.log('tag', t)
@@ -361,6 +379,7 @@ async function onLogin() {
     alert("Could not find a relay list for npub")
   }
 
+  breakFirstRound = false
   while (true) {
     // Iteration for the following edge case:
     // * purplepag.es has a relay list with created_at=x
@@ -368,7 +387,18 @@ async function onLogin() {
     // * the new relay list has a relay with a relay list event whose created_at=x+2
     // * and so on...
     console.log(`Waiting for [${promises.length}] promises`)
-    await Promise.allSettled(promises)
+    await Promise.race([
+      Promise.allSettled(promises),
+      new Promise(resolve => {
+        const timer = setInterval(() => {
+          if (breakFirstRound) { clearInterval(timer); resolve() }
+        }, 100)
+      })
+    ])
+    if (breakFirstRound) {
+      console.log(`Breaking first round early, [${promises.length}] promises still in flight`)
+      break
+    }
     // Move 10002 relays up the list.
     relays.value.sort((a,b) => {
       if (a.userlist>b.userlist) return -1;
@@ -385,6 +415,33 @@ async function onLogin() {
     }
   }
   console.log("We have everything we wanted. Going for the other stuff.")
+
+  // If round one was broken early, helpers relays discovered later may still
+  // be pending. Sync the relay list with the latest 10002 event's tags:
+  // keep existing relay objects (connections/events intact), add missing,
+  // close connections dropped from the list.
+  const latestList = latest_event.value[10002]
+  if (breakFirstRound && latestList) {
+    const byUrl = new Map(relays.value.map(r => [r.url, r]))
+    const synced = []
+    for (const t of latestList.tags) {
+      if (t[0] !== 'r') continue
+      let url = t[1]
+      try { url = normalizeURL(t[1]) } catch { /* fall back to raw */ }
+      let existing = byUrl.get(url)
+      if (existing) {
+        existing.userlist = true
+      } else {
+        existing = {url, extension: false, userlist: true, events: {}, note_ids: new Set()}
+      }
+      synced.push(existing)
+      byUrl.delete(url)
+    }
+    for (const orphan of byUrl.values()) {
+      orphan.relay?.close()
+    }
+    relays.value = synced
+  }
 
   // Second round: get important replaceable non-parametric event kinds from important relays only.
   promises = []
