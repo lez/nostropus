@@ -8,8 +8,20 @@
         <div class="slogan"><span class="our">Optimize your reach</span></div>
       </div>
       <div class="flex-space"></div>
-      <button v-if="pubkey" class="logoutbtn" @click="switchModal = true">Switch user (to anyone)</button>
-      <button v-if="pubkey" class="logoutbtn" @click="onLogout">Log out</button>
+      <div v-if="pubkey" class="userpill" :style="{borderColor: pillColor}" @click.stop="pillMenu = !pillMenu">
+        <template v-if="pillMeta">
+          <img v-if="pillMeta.picture" class="pillavatar" :src="pillMeta.picture">
+          <span>{{ pillMeta.name || pillNpub12 }}</span>
+        </template>
+        <template v-else>
+          <span>{{ pillNpub12 }}</span>
+        </template>
+
+        <div v-if="pillMenu" class="pillmenu" @click.stop>
+          <div class="pillmenuitem" @click="pillMenu = false; switchModal = true">Switch user (to anyone)</div>
+          <div class="pillmenuitem" @click="pillMenu = false; onLogout()">Log out</div>
+        </div>
+      </div>
       <div class="fixbox">
         <span></span>
       </div>
@@ -104,7 +116,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { normalizeURL } from 'nostr-tools/utils'
 import { Relay } from 'nostr-tools/relay'
 import { nip19 } from 'nostr-tools'
@@ -113,6 +125,10 @@ import { queryProfile } from 'nostr-tools/nip05'
 const pubkey = ref(null)
 const npub = ref(null)
 const relays = ref(null)  // [{url: relayurl, extension: bool, relaylist: bool}]
+const pillMenu = ref(false)
+const pillMeta = ref(null)  // {name, picture} | null — parsed latest kind-0 content
+const pillColor = computed(() => pubkey.value ? '#' + pubkey.value.slice(0, 6) : '#888')
+const pillNpub12 = computed(() => pubkey.value ? nip19.npubEncode(pubkey.value).slice(0, 12) + '…' : '')
 const pseen = ref({})  // {relayurl: {profile event}}
 const rseen = ref({})  // {relayurl: {relaylist event}}
 const latest_event = ref({})  // {kind: event}
@@ -170,7 +186,19 @@ watch(gridEl, (el, oldEl) => {
 })
 watch(() => [relays.value?.length, notes.value.length], () => nextTick(redrawTentacles))
 
-onUnmounted(() => { tentacleObserver?.disconnect() })
+// Parse the latest kind-0 profile event into the pill's {name, picture}.
+watch(() => latest_event.value[0], (ev) => {
+  if (!ev?.content) return
+  try { pillMeta.value = JSON.parse(ev.content) } catch { /* leave null */ }
+})
+
+// Close the pill dropdown on any click outside it.
+function closePillMenu() { pillMenu.value = false }
+onMounted(() => document.addEventListener('click', closePillMenu))
+onUnmounted(() => {
+  tentacleObserver?.disconnect()
+  document.removeEventListener('click', closePillMenu)
+})
 
 // Global but not reactive
 let promises = []
@@ -503,6 +531,7 @@ function onLogout() {
   }
   pubkey.value = null
   npub.value = null
+  pillMeta.value = null
   relays.value = null
   pseen.value = {}
   rseen.value = {}
@@ -549,6 +578,7 @@ async function onSwitchGo() {
     }
     pubkey.value = null
     npub.value = null
+    pillMeta.value = null
     relays.value = null
     pseen.value = {}
     rseen.value = {}
@@ -831,15 +861,40 @@ onMounted(async () => {
   gap: 12px;
   align-self: center;
 }
-.logoutbtn {
-  border: none;
-  border-radius: 8px;
-  padding: 0.3em 0.9em;
-  font-size: 1em;
-  margin-right: 12px;
-  background: var(--purple5);
-  color: #fff;
+.userpill {
+  position: relative;
+  border: 2px solid;
+  border-radius: 999px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
+  margin-right: 12px;
+}
+.pillavatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+.pillmenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #fff;
+  border: 1px solid var(--gray4);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 20;
+  min-width: 180px;
+}
+.pillmenuitem {
+  padding: 0.5em 1em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pillmenuitem:hover {
+  background: var(--purple2);
 }
 .modalbg {
   position: fixed;
