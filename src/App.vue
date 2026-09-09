@@ -8,6 +8,8 @@
         <div class="slogan"><span class="our">Optimize your reach</span></div>
       </div>
       <div class="flex-space"></div>
+      <button v-if="pubkey" class="logoutbtn" @click="switchModal = true">Switch user (to anyone)</button>
+      <button v-if="pubkey" class="logoutbtn" @click="onLogout">Log out</button>
       <div class="fixbox">
         <span></span>
       </div>
@@ -15,6 +17,15 @@
 
     <div v-if="!pubkey">Syncronize your events between your relays!</div>
     <button v-if="!pubkey" @click="onLogin">Log in</button>
+
+    <div v-if="switchModal" class="modalbg" @click.self="switchModal = false">
+      <div class="modal">
+        <div class="modaltitle">Switch user (to anyone)</div>
+        <input class="modalinput" v-model="switchInput" placeholder="npub1... or name@domain.lol" @keyup.enter="onSwitchGo">
+        <div class="modalerror" v-if="switchError">{{ switchError }}</div>
+        <button class="modalgo" @click="onSwitchGo">Go</button>
+      </div>
+    </div>
 
     <div class="relaygrid" v-if="relays && relays.length" ref="gridEl">
       <table class="relaytable">
@@ -96,6 +107,8 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { normalizeURL } from 'nostr-tools/utils'
 import { Relay } from 'nostr-tools/relay'
+import { nip19 } from 'nostr-tools'
+import { queryProfile } from 'nostr-tools/nip05'
 
 const pubkey = ref(null)
 const npub = ref(null)
@@ -110,6 +123,9 @@ const notes = ref([])
 const hovered_relay = ref(-1)
 const gridEl = ref(null)
 const tentacles = ref([])  // SVG path strings, one per relay
+const switchModal = ref(false)
+const switchInput = ref('')
+const switchError = ref('')
 const svgW = ref(0)
 const svgH = ref(0)
 
@@ -339,8 +355,13 @@ async function onLogin() {
     pubkey.value = null
     npub.value = null
     alert("Login cancelled.")
+    return
   }
+  await startSession(pk)
+}
 
+async function startSession(targetPk) {
+  pk = targetPk
   pubkey.value = pk
   console.log(`Pubkey is ${pk}`)
 
@@ -473,6 +494,86 @@ async function onLogin() {
 
   // All fetchNotes promises have settled, fix buttons may appear now.
   fixReady.value = true
+}
+
+function onLogout() {
+  window.localStorage.clear()
+  for (let r of relays.value || []) {
+    r.relay?.close()
+  }
+  pubkey.value = null
+  npub.value = null
+  relays.value = null
+  pseen.value = {}
+  rseen.value = {}
+  latest_event.value = {}
+  fixReady.value = false
+  fixing.value = false
+  bootstrap_only_relays.value = []
+  notes.value = []
+  hovered_relay.value = -1
+  tentacles.value = []
+  breakFirstRound = false
+  promises = []
+  newpromises = []
+  note_ids = new Set()
+  pk = null
+}
+
+async function resolveSwitchPk(input) {
+  input = input.trim()
+  if (!input) throw new Error('Enter an npub or a NIP-05 identifier.')
+  // Bare npub.
+  if (input.startsWith('npub1')) {
+    const decoded = nip19.decode(input)
+    if (decoded.type !== 'npub') throw new Error('Not an npub.')
+    return decoded.data
+  }
+  // NIP-05 identifier: name@domain (bare domain means name="_").
+  const at = input.lastIndexOf('@')
+  const name = at >= 0 ? input.slice(0, at).toLowerCase() : '_'
+  const domain = at >= 0 ? input.slice(at + 1).toLowerCase() : input.toLowerCase()
+  if (!domain.includes('.')) throw new Error('Enter an npub or a NIP-05 identifier (name@domain).')
+  const profile = await queryProfile(`${name}@${domain}`)
+  if (!profile?.pubkey) throw new Error('NIP-05 lookup returned no pubkey.')
+  return profile.pubkey
+}
+
+async function onSwitchGo() {
+  switchError.value = ''
+  try {
+    const target = await resolveSwitchPk(switchInput.value)
+    // Reset current session exactly like onLogout, then persist the new user.
+    for (let r of relays.value || []) {
+      r.relay?.close()
+    }
+    pubkey.value = null
+    npub.value = null
+    relays.value = null
+    pseen.value = {}
+    rseen.value = {}
+    latest_event.value = {}
+    fixReady.value = false
+    fixing.value = false
+    bootstrap_only_relays.value = []
+    notes.value = []
+    hovered_relay.value = -1
+    tentacles.value = []
+    breakFirstRound = false
+    promises = []
+    newpromises = []
+    note_ids = new Set()
+    pk = null
+
+    switchModal.value = false
+    switchInput.value = ''
+
+    // Log straight in with the new pubkey, without needing the extension.
+    window.localStorage.setItem('pubkey', target)
+    await startSession(target)
+  } catch (err) {
+    switchError.value = String(err.message || err)
+  }
 }
 
 function displayUrl(url) {
@@ -729,6 +830,58 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   align-self: center;
+}
+.logoutbtn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.3em 0.9em;
+  font-size: 1em;
+  margin-right: 12px;
+  background: var(--purple5);
+  color: #fff;
+  cursor: pointer;
+}
+.modalbg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 480px;
+  max-width: 90vw;
+}
+.modaltitle {
+  font-size: 1.2em;
+  font-weight: bold;
+}
+.modalinput {
+  padding: 0.5em;
+  font-size: 1em;
+  border: 1px solid var(--gray5);
+  border-radius: 6px;
+}
+.modalgo {
+  align-self: flex-end;
+  border: none;
+  border-radius: 8px;
+  padding: 0.4em 1.5em;
+  background: var(--purple5);
+  color: #fff;
+  cursor: pointer;
+}
+.modalerror {
+  color: #b00;
+  font-size: 0.85em;
 }
 .fixbtn {
   font-size: 1.3em;
