@@ -34,7 +34,7 @@
           <tr class="relayline" v-for="r, ridx in relays" @mouseover="dot_hover(ridx)" @mouseleave="dot_blur">
             <td class="tentacles"></td>
             <td class="relayurl">
-              <span :class="{bold: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '').replace(/\/$/, '')}}</span>
+              <span :class="{hovered: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '').replace(/\/$/, '')}}</span>
             </td>
             <td>
               <span v-if="r.note_ids.size > 0" :class="{green: r.eosed && r.note_ids.size == notes.length, yellow: r.eosed && r.note_ids.size < notes.length}">{{ r.note_ids.size }}</span>
@@ -663,6 +663,9 @@ onMounted(async () => {
 }
 .relayurl {
   padding-left: 18px;
+}
+.relayurl span.hovered {  /* Hover emphasis via color only: font weight changes glyph widths and would reflow the column. */
+  color: var(--gray17);
 }
 .fixbox {
   display: flex;
