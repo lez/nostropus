@@ -18,6 +18,7 @@
         </template>
 
         <div v-if="pillMenu" class="pillmenu" @click.stop>
+          <div class="pillmenuitem" @click="pillMenu = false; onCopyNpub()">Copy npub</div>
           <div class="pillmenuitem" @click="pillMenu = false; switchModal = true">Switch user (to anyone)</div>
           <div class="pillmenuitem" @click="pillMenu = false; onLogout()">Log out</div>
         </div>
@@ -33,7 +34,7 @@
     <div v-if="switchModal" class="modalbg" @click.self="switchModal = false">
       <div class="modal">
         <div class="modaltitle">Switch user (to anyone)</div>
-        <input class="modalinput" v-model="switchInput" placeholder="npub1... or name@domain.lol" @keyup.enter="onSwitchGo">
+        <input class="modalinput" v-model="switchInput" placeholder="npub1... or name@domain.lol" @keyup.enter="onSwitchGo" @input="switchError = ''" ref="switchInputEl">
         <div class="modalerror" v-if="switchError">{{ switchError }}</div>
         <button class="modalgo" @click="onSwitchGo">Go</button>
       </div>
@@ -142,6 +143,10 @@ const tentacles = ref([])  // SVG path strings, one per relay
 const switchModal = ref(false)
 const switchInput = ref('')
 const switchError = ref('')
+const switchInputEl = ref(null)
+watch(switchModal, (open) => {
+  if (open) nextTick(() => switchInputEl.value?.focus())
+})
 const svgW = ref(0)
 const svgH = ref(0)
 
@@ -199,6 +204,13 @@ onUnmounted(() => {
   tentacleObserver?.disconnect()
   document.removeEventListener('click', closePillMenu)
 })
+
+// Close the switch-user modal on ESC.
+function onEscKey(e) {
+  if (e.key === 'Escape') switchModal.value = false
+}
+onMounted(() => document.addEventListener('keydown', onEscKey))
+onUnmounted(() => document.removeEventListener('keydown', onEscKey))
 
 // Global but not reactive
 let promises = []
@@ -522,6 +534,11 @@ async function startSession(targetPk) {
 
   // All fetchNotes promises have settled, fix buttons may appear now.
   fixReady.value = true
+}
+
+function onCopyNpub() {
+  if (!pubkey.value) return
+  navigator.clipboard.writeText(nip19.npubEncode(pubkey.value))
 }
 
 function onLogout() {
@@ -881,12 +898,13 @@ onMounted(async () => {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  background: #fff;
-  border: 1px solid var(--gray4);
+  background: var(--gray3);
+  border: 1px solid var(--gray5);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
   z-index: 20;
   min-width: 180px;
+  color: var(--gray16);
 }
 .pillmenuitem {
   padding: 0.5em 1em;
@@ -899,14 +917,15 @@ onMounted(async () => {
 .modalbg {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10;
 }
 .modal {
-  background: #fff;
+  background: var(--gray3);
+  border: 1px solid var(--gray5);
   border-radius: 10px;
   padding: 20px;
   display: flex;
@@ -914,6 +933,7 @@ onMounted(async () => {
   gap: 12px;
   width: 480px;
   max-width: 90vw;
+  color: var(--gray16);
 }
 .modaltitle {
   font-size: 1.2em;
@@ -924,18 +944,23 @@ onMounted(async () => {
   font-size: 1em;
   border: 1px solid var(--gray5);
   border-radius: 6px;
+  background: var(--gray2);
+  color: var(--gray16);
+}
+.modalinput::placeholder {
+  color: var(--gray10);
 }
 .modalgo {
   align-self: flex-end;
   border: none;
   border-radius: 8px;
   padding: 0.4em 1.5em;
-  background: var(--purple5);
+  background: var(--purple3);
   color: #fff;
   cursor: pointer;
 }
 .modalerror {
-  color: #b00;
+  color: #f66;
   font-size: 0.85em;
 }
 .fixbtn {
