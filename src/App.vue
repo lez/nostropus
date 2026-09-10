@@ -102,7 +102,7 @@
         </tbody>
       </table>
 
-      <div v-for="note in notes" class="note">
+      <div v-for="note in notes" :key="note.id" class="note">
         <div class="dots">
           <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), yellow: r.limited_note_id == note.id, hollow: r.unreachable && !r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur"></div>
         </div>
