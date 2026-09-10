@@ -72,28 +72,28 @@
 
             <!-- relaylist -->
             <td>
-              <div v-if="r.events[10002]" :class="{green: r.events[10002].id == latest_event[10002].id}">{{(new Date(r.events[10002].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
+              <div v-if="r.events[10002]" :class="{green: r.events[10002].id == latest_event[10002].id}" :title="formatFullTime(r.events[10002].created_at)">{{ formatTime(r.events[10002].created_at) }}
               </div>
               <div v-if="10002 in r.events && !r.events[10002]" class="red">event not found</div>
             </td>
 
             <!-- profile -->
             <td>
-              <div v-if="r.events[0]" :class="{green: r.events[0].id == latest_event[0].id}">{{(new Date(r.events[0].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
+              <div v-if="r.events[0]" :class="{green: r.events[0].id == latest_event[0].id}" :title="formatFullTime(r.events[0].created_at)">{{ formatTime(r.events[0].created_at) }}
               </div>
               <div v-if="0 in r.events && !r.events[0]" class="red">event not found</div>
             </td>
 
             <!-- Follows -->
             <td>
-              <div v-if="r.events[3]" :class="{green: r.events[3].id == latest_event[3].id}">{{(new Date(r.events[3].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
+              <div v-if="r.events[3]" :class="{green: r.events[3].id == latest_event[3].id}" :title="formatFullTime(r.events[3].created_at)">{{ formatTime(r.events[3].created_at) }}
               </div>
               <div v-if="3 in r.events && !r.events[3]" class="red">event not found</div>
             </td>
 
             <!-- Blossom -->
             <td>
-              <div v-if="r.events[10066]" :class="{green: r.events[10066].id == latest_event[10066].id}">{{(new Date(r.events[10066].created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false})}}
+              <div v-if="r.events[10066]" :class="{green: r.events[10066].id == latest_event[10066].id}" :title="formatFullTime(r.events[10066].created_at)">{{ formatTime(r.events[10066].created_at) }}
               </div>
               <div v-if="10066 in r.events && !r.events[10066]" class="red">event not found</div>
             </td>
@@ -621,6 +621,28 @@ async function onSwitchGo() {
   } catch (err) {
     switchError.value = String(err.message || err)
   }
+}
+
+function formatTime(ts) {
+  // ts: unix seconds. Relative for recent, absolute for older.
+  const diff = Date.now() / 1000 - ts
+  if (diff < 60) return `${Math.max(0, Math.floor(diff))}s`
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`
+  if (diff < 14 * 86400) return `${Math.floor(diff / 86400)}d`
+  const d = new Date(ts * 1000)
+  const month = d.toLocaleString("en-US", {month: "short"})
+  if (diff < 182 * 86400) return `${d.getDate()} ${month}`
+  return `${d.getDate()} ${month} ${d.getFullYear()}`
+}
+
+function formatFullTime(ts) {
+  // e.g. "13 May 2025 13:25"
+  const d = new Date(ts * 1000)
+  const month = d.toLocaleString("en-US", {month: "short"})
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${d.getDate()} ${month} ${d.getFullYear()} ${hh}:${mm}`
 }
 
 function displayUrl(url) {
