@@ -3,7 +3,7 @@
     <div class="header">
       <img class="logo" height="100" src="/img/nostropus.png">
 
-      <div class="">
+      <div class="headside">
         <div class="headline">Nostropus</div>
         <div class="slogan"><span class="our">Optimize your reach</span></div>
       </div>
@@ -16,6 +16,7 @@
         <template v-else>
           <span>{{ pillNpub12 }}</span>
         </template>
+        <span class="pillcaret"></span>
 
         <div v-if="pillMenu" class="pillmenu" @click.stop>
           <div class="pillmenuitem" @click="pillMenu = false; onCopyNpub()">Copy npub</div>
@@ -901,7 +902,9 @@ onMounted(async () => {
   align-self: center;
 }
 .userpill {
-  position: relative;
+  position: absolute;
+  top: 0;
+  right: 12px;
   border: 2px solid;
   border-radius: 999px;
   padding: 6px 12px;
@@ -909,7 +912,16 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  margin-right: 12px;
+}
+.userpill:hover {
+  background: var(--purple2);
+}
+.pillcaret {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--gray16);
 }
 .pillavatar {
   width: 24px;

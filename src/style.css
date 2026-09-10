@@ -44,14 +44,19 @@ a {
   color: var(--purple5);
 }
 .header {
-  display: flex;
+  display: block;
+  position: relative;
   justify-content: space-between;
-  max-width: 960px;
   margin: 32px 0 0 0;
 }
 .logo {
   max-height: 150px;
   padding-left: 24px;
+  vertical-align: middle;
+}
+.headside {
+  display: inline-block;
+  vertical-align: middle;
 }
 .usericon {
   max-height: 48px;
