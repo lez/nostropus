@@ -105,7 +105,7 @@
         <div class="dots">
           <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), yellow: r.limited_note_id == note.id, hollow: r.unreachable && !r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur"></div>
         </div>
-        <span class="note-created-at">{{ (new Date(note.created_at*1000)).toLocaleString("en-US", {month: "short", day: "numeric", hour: "2-digit", minute: "numeric", year: "numeric", hour12: false}) }}</span>
+        <span class="note-created-at" :title="formatFullTime(note.created_at)">{{ formatTime(note.created_at) }}</span>
         <span class="note-content">{{ note.content.substr(0, 81) }}</span>
       </div>
 
