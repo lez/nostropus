@@ -116,6 +116,8 @@ a {
 .note {
   display: grid;
   grid-template-columns: 100px max-content 0.3fr;
+  content-visibility: auto;  /* Skip rendering off-screen rows. */
+  contain-intrinsic-size: auto 24px;  /* Estimated row height for scrollbar stability. */
 }
 .dots {
   display: flex;
