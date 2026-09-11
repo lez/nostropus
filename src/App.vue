@@ -59,7 +59,7 @@
             <th title="kind 10002">Relay List</th>
             <th title="kind 0">Profile</th>
             <th title="kind 3">Follows</th>
-            <th title="kind 10066">Blossom</th>
+            <th title="kind 10063">Blossom</th>
           </tr>
         </thead>
         <tbody>
@@ -101,9 +101,9 @@
 
             <!-- Blossom -->
             <td>
-              <div v-if="r.events[10066]" :class="{green: r.events[10066].id == latest_event[10066].id}" :title="formatFullTime(r.events[10066].created_at)">{{ formatTime(r.events[10066].created_at) }}
+              <div v-if="r.events[10063]" :class="{green: r.events[10063].id == latest_event[10063].id}" :title="formatFullTime(r.events[10063].created_at)">{{ formatTime(r.events[10063].created_at) }}
               </div>
-              <div v-if="10066 in r.events && !r.events[10066]" class="red">event not found</div>
+              <div v-if="10063 in r.events && !r.events[10063]" class="red">event not found</div>
             </td>
           </tr>
         </tbody>
@@ -521,7 +521,7 @@ async function startSession(targetPk) {
 
   for (let r of relays.value) {
     if (r.userlist) {
-      promises.push(skyLaunch(r, [0, 3, 10002, 10066]))
+      promises.push(skyLaunch(r, [0, 3, 10002, 10063]))
       ul = ul + 1
     }
     else {
@@ -675,7 +675,7 @@ async function onRetry(r) {
   // Connected now: clear the error, then fetch the replaceable kinds and the notes again.
   r.error = null
   r.unreachable = false
-  try { await skyLaunch(r, [0, 3, 10002, 10066]) } catch (e) { console.log('retry skyLaunch rejected', e) }
+  try { await skyLaunch(r, [0, 3, 10002, 10063]) } catch (e) { console.log('retry skyLaunch rejected', e) }
   try { await fetchNotes(r) } catch (e) { console.log('retry fetchNotes rejected', e) }
   r.retrying = false
 }
@@ -696,7 +696,7 @@ async function onFixEvents(r) {
   r.error = null  // Clear any stale error now that we're connected.
 
   // Upload the replaceable events, then the missing notes, newest first.
-  const repl = [[0, 'profile'], [3, 'follows'], [10066, 'blossom'], [10002, 'relay list']]
+  const repl = [[0, 'profile'], [3, 'follows'], [10063, 'blossom'], [10002, 'relay list']]
   const queue = []
   for (let [kind, label] of repl) {
     const ev = latest_event.value[kind]
