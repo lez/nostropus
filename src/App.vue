@@ -21,6 +21,7 @@
         <div v-if="pillMenu" class="pillmenu" @click.stop>
           <div class="pillmenuitem" @click="pillMenu = false; onCopyNpub()">Copy npub</div>
           <div class="pillmenuitem" @click="pillMenu = false; switchModal = true">Switch user (to anyone)</div>
+          <div v-if="pubkeySource === 'external'" class="pillmenuitem" @click="pillMenu = false; cleanup(); onLogin()">Log in via extension</div>
           <div class="pillmenuitem" @click="pillMenu = false; onLogout()">Log out</div>
         </div>
       </div>
@@ -131,6 +132,7 @@ import { nip19 } from 'nostr-tools'
 import { queryProfile } from 'nostr-tools/nip05'
 
 const pubkey = ref(null)
+const pubkeySource = ref(null)  // 'extension' | 'external' — where the current pubkey came from
 const npub = ref(null)
 const relays = ref(null)  // [{url: relayurl, extension: bool, relaylist: bool}]
 const pillMenu = ref(false)
@@ -177,7 +179,7 @@ function redrawTentacles() {
     if (!row || !dot) continue
     const rbox = row.children[1].getBoundingClientRect()
     const dbox = dot.getBoundingClientRect()
-    const x0 = rbox.left - gbox.left
+    const x0 = rbox.left - gbox.left - 5
     const y0 = rbox.top + rbox.height / 2 - gbox.top
     const x1 = dbox.left + dbox.width / 2 - gbox.left
     const y1 = dbox.top - gbox.top + 4
@@ -398,6 +400,8 @@ async function onLogin() {
   pk = await window.nostr.getPublicKey()
   if (pk) {
     window.localStorage.setItem('pubkey', pk)
+    window.localStorage.setItem('pubkey_source', 'extension')
+    pubkeySource.value = 'extension'
   } else {
     pubkey.value = null
     npub.value = null
@@ -412,7 +416,7 @@ async function startSession(targetPk) {
   pubkey.value = pk
   console.log(`Pubkey is ${pk}`)
 
-  if (window.nostr.getRelays) {
+  if (window.nostr?.getRelays) {
     let rlist = await window.nostr.getRelays()
     console.log(rlist)
 
@@ -548,12 +552,13 @@ function onCopyNpub() {
   navigator.clipboard.writeText(nip19.npubEncode(pubkey.value))
 }
 
-function onLogout() {
+function cleanup() {
   window.localStorage.clear()
   for (let r of relays.value || []) {
     r.relay?.close()
   }
   pubkey.value = null
+  pubkeySource.value = null
   npub.value = null
   pillMeta.value = null
   relays.value = null
@@ -571,6 +576,10 @@ function onLogout() {
   newpromises = []
   note_ids = new Set()
   pk = null
+}
+
+function onLogout() {
+  cleanup()
 }
 
 async function resolveSwitchPk(input) {
@@ -596,34 +605,15 @@ async function onSwitchGo() {
   switchError.value = ''
   try {
     const target = await resolveSwitchPk(switchInput.value)
-    // Reset current session exactly like onLogout, then persist the new user.
-    for (let r of relays.value || []) {
-      r.relay?.close()
-    }
-    pubkey.value = null
-    npub.value = null
-    pillMeta.value = null
-    relays.value = null
-    pseen.value = {}
-    rseen.value = {}
-    latest_event.value = {}
-    fixReady.value = false
-    fixing.value = false
-    bootstrap_only_relays.value = []
-    notes.value = []
-    hovered_relay.value = -1
-    tentacles.value = []
-    breakFirstRound = false
-    promises = []
-    newpromises = []
-    note_ids = new Set()
-    pk = null
+    cleanup()
 
     switchModal.value = false
     switchInput.value = ''
 
     // Log straight in with the new pubkey, without needing the extension.
     window.localStorage.setItem('pubkey', target)
+    window.localStorage.setItem('pubkey_source', 'external')
+    pubkeySource.value = 'external'
     await startSession(target)
   } catch (err) {
     switchError.value = String(err.message || err)
@@ -785,9 +775,15 @@ function formatError(e) {
 onMounted(async () => {
   console.clear()
   let pk = window.localStorage.getItem('pubkey')
+  pubkeySource.value = window.localStorage.getItem('pubkey_source')
   if (pk) {
-    await waitForWindowNostr()
-    onLogin()
+    if (pubkeySource.value === 'external') {
+      // External pubkey: no extension needed, start directly with it.
+      await startSession(pk)
+    } else {
+      await waitForWindowNostr()
+      onLogin()
+    }
   }
 })
 </script>
@@ -821,7 +817,7 @@ onMounted(async () => {
 }
 .relaytable th, .relaytable td {
   text-align: left;
-  padding: 0 8px 0 0;
+  padding: 0 8px 0 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
