@@ -892,6 +892,7 @@ onMounted(async () => {
 }
 .note-content {
   width: 300px;
+  padding-left: 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -899,6 +900,7 @@ onMounted(async () => {
 .note-created-at {
   white-space: nowrap;
   padding-left: 9px;
+  opacity: 50%;
 }
 .relayurl {
   padding-left: 18px;
