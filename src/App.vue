@@ -41,11 +41,17 @@
       </div>
     </div>
 
-    <div class="relaygrid" v-if="relays && relays.length" ref="gridEl">
+    <div class="relaygrid" v-if="relays && relays.length" ref="gridEl" :style="{'--ndots': relays.length}">
       <table class="relaytable">
         <thead>
           <tr class="bold">
-            <th class="tentaclecol"></th>
+            <th class="tentaclecol">
+              <!-- Hidden dots line: stretches this column to match the dots
+                   column width in the note grid (N dots * 1.6em). -->
+              <div class="dots dots-hidden" v-if="notes.length">
+                <div v-for="r in relays" :key="r.url" class="dot"></div>
+              </div>
+            </th>
             <th>Relay</th>
             <th>Notes</th>
             <th>Status</th>
@@ -821,8 +827,13 @@ onMounted(async () => {
   white-space: nowrap;
 }
 .relaytable th.tentaclecol, .relaytable td:first-child {
-  width: 100px;  /* Same width as the dots column in the note grid. */
+  width: 100px;  /* Minimum width; grows to fit the hidden dots line. */
   min-width: 100px;
+}
+.dots-hidden {
+  visibility: hidden;  /* Occupies width (and stretches the column) but stays invisible. */
+  height: 0;           /* ...without adding vertical space to the header row. */
+  overflow: hidden;
 }
 .relayline > td {
   transition: background 0.15s ease;

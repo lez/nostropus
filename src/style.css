@@ -115,7 +115,9 @@ a {
 }
 .note {
   display: grid;
-  grid-template-columns: 100px max-content 0.3fr;
+  /* Dots column: per-dot width (matches .dot) times the number of relays,
+     --ndots is set on .relaygrid; 8 dots is the default before it is known. */
+  grid-template-columns: calc(var(--ndots, 8) * 1.6em) max-content 0.3fr;
   content-visibility: auto;  /* Skip rendering off-screen rows. */
   contain-intrinsic-size: auto 24px;  /* Estimated row height for scrollbar stability. */
 }
