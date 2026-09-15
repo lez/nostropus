@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="app">
     <div class="header">
       <img class="logo" height="100" src="/img/nostropus.png">
 
@@ -30,8 +30,26 @@
       </div>
     </div>
 
-    <div v-if="!pubkey">Syncronize your events between your relays!</div>
-    <button v-if="!pubkey" @click="onLogin">Log in</button>
+    <div v-if="!pubkey" class="landing">
+      <div class="landingbuttons">
+        <button @click="onLogin">Log in</button>
+        <button @click="switchModal = true">View any nostr user</button>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="cardtitle">Be sure to reach your audience!</div>
+          <div class="cardtext">Put your notes right where your followers are looking at.</div>
+        </div>
+        <div class="card">
+          <div class="cardtitle">Prevent old notes from disappearing</div>
+          <div class="cardtext">Make sure they are stored at multiple locations.</div>
+        </div>
+        <div class="card">
+          <div class="cardtitle">Gain deeper understanding</div>
+          <div class="cardtext">See with your own eyes. A beautiful visualization helps you through the ocean of data.</div>
+        </div>
+      </div>
+    </div>
 
     <div v-if="switchModal" class="modalbg" @click.self="switchModal = false">
       <div class="modal">
@@ -120,6 +138,11 @@
       <svg v-if="tentacles.length" class="tentacles" :width="svgW" :height="svgH" :viewBox="`0 0 ${svgW} ${svgH}`">
         <path v-for="(d, idx) in tentacles" :key="idx" :d="d" :class="{thick: idx == hovered_relay}" />
       </svg>
+    </div>
+
+    <div class="appfooter">
+      Created out of frustration but with love by
+      <a href="https://jumble.social/npub1elta7cneng3w8p9y4dw633qzdjr4kyvaparuyuttyrx6e8xp7xnq32cume">@lez</a>
     </div>
   </div>
 </template>
@@ -789,6 +812,71 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.app {
+  padding-bottom: 44px;  /* Room for the fixed footer. */
+}
+.landing {
+  text-align: center;
+  margin-top: 64px;
+  padding: 0 24px;
+}
+.landingbuttons {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.landingbuttons button {
+  border: none;
+  border-radius: 8px;
+  padding: 0.5em 1.5em;
+  background: var(--purple3);
+  color: #fff;
+  font-size: 1em;
+  cursor: pointer;
+}
+.landingbuttons button:hover {
+  background: var(--purple4);
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  max-width: 960px;
+  margin: 48px auto 0 auto;
+}
+.card {
+  background: var(--purple2);
+  border: 1px solid var(--purple3);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: left;
+  color: var(--gray13);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.cardtitle {
+  color: var(--purple5);
+  font-weight: bold;
+  font-size: 1.4rem;
+}
+.cardtext {
+  margin-top: 8px;
+  font-size: 0.9em;
+  color: var(--gray18);
+}
+.appfooter {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  text-align: center;
+  padding: 8px 12px;
+  background: var(--purple1);
+  border-top: 1px solid var(--purple2);
+  color: var(--gray10);
+  font-size: 0.8em;
+  z-index: 5;  /* Below the modal overlay (z-index 10). */
+}
 .relaygrid {
   display: grid;
   position: relative;
