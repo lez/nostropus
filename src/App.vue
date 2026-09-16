@@ -370,29 +370,76 @@ function fetchNotes(r) {
     console.assert(r.events)  // It should be set to {}.
     console.assert(r.note_ids)  // It should be set to Set().
 
+    // Paginated fetch. We do NOT stop at the first real EOSE. On each EOSE we
+    // open a new REQ for strictly older events (until = oldest received - 1)
+    // and keep going until a page returns zero events. Only then do we set
+    // r.eosed and close the subscription.
+    let sub = null            // current nostr-tools subscription
+    let idleTimer = null      // idle-based EOSE fallback for the current page
+    let pageCount = 0         // events received in the current page
+    let oldestTs = null       // oldest created_at seen across all pages
+    let done = false          // whole paginated fetch has settled
+    let expectingClose = false  // true while we intentionally close a page sub
+
     // External idle-based EOSE: nostr-tools' built-in fallback fires 4.4s
-    // after subscribe even if events are still streaming. Override it to 10
-    // minutes as a mere safety net and run our own 4.4s idle timer that is
-    // reset on every received event. 4.4s of silence → treat as EOSE.
-    let idleTimer = null
-    const idleEose = () => {
+    // after subscribe even if events are still streaming. Override it to 1
+    // day as a mere safety net and run our own 4.4s idle timer that is reset
+    // on every received event. 4.4s of silence → treat the page as EOSE'd.
+    const bump = () => {
+      clearTimeout(idleTimer)
+      idleTimer = setTimeout(onPageEose, 4400)
+    }
+
+    // Close the current page's subscription without treating the resulting
+    // onclose as an error/unexpected close.
+    const closeSub = () => {
+      if (!sub) return
+      expectingClose = true
+      try { sub.close() } catch (err) { console.log(r.url, "sub close error", err) }
+      expectingClose = false
+    }
+
+    // Finish the whole paginated fetch: mark eosed, close the sub, resolve.
+    const finish = () => {
+      if (done) return
+      done = true
+      clearTimeout(idleTimer)
       if (r.relay.connected) {
         r.eosed = true
       }
-      resolve(r.url)  // no-op if already settled by a real EOSE or close
-    }
-    const bump = () => {
-      clearTimeout(idleTimer)
-      idleTimer = setTimeout(idleEose, 4400)
+      closeSub()  // Close subscription: all events on server have been received.
+      resolve(r.url)  // no-op if already settled by a close/error
     }
 
-    let subparams = {
+    // Called on a real EOSE or after 4.4s idle for the current page.
+    const onPageEose = () => {
+      if (done) return
+      clearTimeout(idleTimer)  // Real EOSE wins over the idle guess.
+      if (!r.relay.connected) {
+        // Not a trusted EOSE (synthetic from timeout on a dead conn). Bail.
+        done = true
+        resolve(r.url)
+        return
+      }
+      if (pageCount === 0) {
+        // This page returned zero events → the relay has nothing older.
+        // All events on the server have been received.
+        finish()
+        return
+      }
+      // We received events this page. Fetch strictly older events next.
+      startPage(oldestTs - 1)
+    }
+
+    const subparams = {
       onevent: (e) => {
         bump()  // Reset the idle timer on each received event.
+        pageCount++
         console.log('onevent', e.id)
         r.note_ids.add(e.id)
-        // Track the last (oldest) note timestamp the relay delivered
-        if (!r.eosed) r.note_last_ts = e.created_at
+        // Track the last (oldest) note timestamp the relay delivered.
+        if (oldestTs === null || e.created_at < oldestTs) oldestTs = e.created_at
+        if (!r.eosed) r.note_last_ts = oldestTs
         if (note_ids.has(e.id)) {
           console.log('dup event', e.id)
         } else {
@@ -402,16 +449,13 @@ function fetchNotes(r) {
           notes.value.sort((a, b) => {if (a.created_at > b.created_at) return -1; if (a.created_at < b.created_at) return 1; return 0})
         }
       },
-      oneose: () => {
-        clearTimeout(idleTimer)  // Real EOSE wins over the idle guess.
-        if (r.relay.connected) {
-          r.eosed = true
-        }
-        resolve(r.url)
-      },
+      oneose: onPageEose,
       onclose: (e) => {
-        //WE_ARE_HERE: what to do here? All oncloses should be disabled when data was fetched from relays.
+        // Ignore closes we triggered ourselves (page transitions / finish) and
+        // any close after the paginated fetch has already settled.
+        if (expectingClose || done) return
         clearTimeout(idleTimer)
+        done = true
         r.error = e
         console.log(r.url, "subscription closed", e)
         reject(e)
@@ -419,9 +463,21 @@ function fetchNotes(r) {
       eoseTimeout: 60 * 24 * 60 * 1000  // 1 day timeout; the idle timer is the real EOSE timeout.
     }
 
-    console.log("Fetching notest from ", r.url)
-    bump()  // Arm the idle timer: 4.4s of silence from now counts as EOSE.
-    r.relay.subscribe([{authors: [pk], kinds: [1]}], subparams)
+    // Open one page of the paginated fetch. `until` is the upper bound on
+    // created_at (inclusive) for this REQ; null means "no upper bound".
+    const startPage = (until) => {
+      pageCount = 0
+      const filter = {authors: [pk], kinds: [1]}
+      if (until !== null && until !== undefined) filter.until = until
+      console.log("Fetching notes from", r.url, "until", until)
+      // Close the previous page's subscription before opening the next one.
+      closeSub()
+      bump()  // Arm the idle timer: 4.4s of silence from now counts as EOSE.
+      sub = r.relay.subscribe([filter], subparams)
+    }
+
+    console.log("Fetching notes from ", r.url)
+    startPage(null)  // First page: no upper bound.
   })
 }
 
