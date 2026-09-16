@@ -127,7 +127,7 @@
         </tbody>
       </table>
 
-      <div v-for="note in notes" :key="note.id" class="note">
+      <div v-if="allSettled" v-for="note in notes" :key="note.id" class="note">
         <div class="dots">
           <div v-for="r, idx in relays" class="dot"
             :class="{green: r.note_ids.has(note.id), yellow: r.limited_note_id == note.id, hollow: r.unreachable, unknown: !r.unreachable && !r.eosed && noteOutOfRange(r, note), bold: idx==hovered_relay}"
@@ -183,6 +183,8 @@ watch(switchModal, (open) => {
 })
 const svgW = ref(0)
 const svgH = ref(0)
+
+const allSettled = computed(() => relays.value && relays.value.length && relays.value.every(r => r.unreachable || r.eosed))
 
 function redrawTentacles() {
   const grid = gridEl.value
