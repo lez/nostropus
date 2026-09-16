@@ -129,7 +129,9 @@
 
       <div v-for="note in notes" :key="note.id" class="note">
         <div class="dots">
-          <div v-for="r, idx in relays" class="dot" :class="{green: r.note_ids.has(note.id), yellow: r.limited_note_id == note.id, hollow: r.unreachable && !r.note_ids.has(note.id), bold: idx==hovered_relay}" @mouseover="dot_hover(idx)" @mouseleave="dot_blur"></div>
+          <div v-for="r, idx in relays" class="dot"
+            :class="{green: r.note_ids.has(note.id), yellow: r.limited_note_id == note.id, hollow: r.unreachable, unknown: !r.unreachable && !r.eosed && noteOutOfRange(r, note), bold: idx==hovered_relay}"></div>
+            @mouseover="dot_hover(idx)" @mouseleave="dot_blur"></div>
         </div>
         <span class="note-created-at" :title="formatFullTime(note.created_at)">{{ formatTime(note.created_at) }}</span>
         <span class="note-content">{{ note.content.substr(0, 81) }}</span>
@@ -305,7 +307,7 @@ function getOnEventFn(relay) {
             }
             if (!found) {
               // Add relay to the end of wrelays.
-              let nr = {url: nurl, extension: false, userlist: true, events: {}, note_ids: new Set()}
+              let nr = {url: nurl, extension: false, userlist: true, events: {}, note_ids: new Set(), note_last_ts: null}
               relays.value.push(nr)
               newpromises.push(
                 skyLaunch(
@@ -387,6 +389,8 @@ function fetchNotes(r) {
         bump()  // Reset the idle timer on each received event.
         console.log('onevent', e.id)
         r.note_ids.add(e.id)
+        // Track the last (oldest) note timestamp the relay delivered
+        if (!r.eosed) r.note_last_ts = e.created_at
         if (note_ids.has(e.id)) {
           console.log('dup event', e.id)
         } else {
@@ -410,13 +414,21 @@ function fetchNotes(r) {
         console.log(r.url, "subscription closed", e)
         reject(e)
       },
-      eoseTimeout: 10 * 60 * 1000  // 10-minute nostr-tools fallback; the idle timer is the real EOSE.
+      eoseTimeout: 60 * 24 * 60 * 1000  // 1 day timeout; the idle timer is the real EOSE timeout.
     }
 
     console.log("Fetching notest from ", r.url)
     bump()  // Arm the idle timer: 4.4s of silence from now counts as EOSE.
     r.relay.subscribe([{authors: [pk], kinds: [1]}], subparams)
   })
+}
+
+// True when the note is older than the oldest note this relay delivered:
+// the relay apparently doesn't keep notes that far back. note_last_ts is
+// null until the relay delivers any note.
+function noteOutOfRange(r, note) {
+  if (r.eosed) return false
+  return note.created_at < r.note_last_ts
 }
 
 async function onLogin() {
@@ -452,6 +464,7 @@ async function startSession(targetPk) {
           userlist: false,
           events: {},
           note_ids: new Set(),
+          note_last_ts: null,
         }
       }
     )
@@ -460,9 +473,9 @@ async function startSession(targetPk) {
   if (!relays.value?.length) {
     // Extension provided no relays, bootstrap with default relays.
     relays.value = [
-      {url: "wss://purplepag.es/", extension: true, userlist: false, events: {}, note_ids: new Set()},
-      {url: "wss://nos.lol/", extension: true, userlist: false, events: {}, note_ids: new Set()},
-      {url: "wss://relay.damus.io/", extension: true, userlist: false, events: {}, note_ids: new Set()},
+      {url: "wss://purplepag.es/", extension: true, userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
+      {url: "wss://nos.lol/", extension: true, userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
+      {url: "wss://relay.damus.io/", extension: true, userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
     ]
   }
 
@@ -527,7 +540,7 @@ async function startSession(targetPk) {
       if (existing) {
         existing.userlist = true
       } else {
-        existing = {url, extension: false, userlist: true, events: {}, note_ids: new Set()}
+        existing = {url, extension: false, userlist: true, events: {}, note_ids: new Set(), note_last_ts: null}
       }
       synced.push(existing)
       byUrl.delete(url)

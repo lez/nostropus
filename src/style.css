@@ -145,6 +145,10 @@ a {
   background: transparent;
   border: 2px solid #b00;
 }
+.dot.unknown::after {
+  background: transparent;
+  border: 2px solid --gray14;
+}
 .dot.yellow::after {
   background: yellow;
 }
