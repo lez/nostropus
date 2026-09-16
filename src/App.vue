@@ -1001,6 +1001,7 @@ onMounted(async () => {
 }
 .relayurl {
   padding-left: 18px;
+  max-width: 240px;
 }
 .relayurl span.hovered {  /* Hover emphasis via color only: font weight changes glyph widths and would reflow the column. */
   color: var(--gray17);
