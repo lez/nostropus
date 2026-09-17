@@ -60,6 +60,25 @@
       </div>
     </div>
 
+    <div v-if="showAllModal" class="modalbg" @click.self="showAllModal = false">
+      <div class="modal">
+        <div class="modaltitle">All relays</div>
+        <div class="allrelaylist">
+          <div v-for="r in relays" :key="r.url" class="allrelayitem">
+            <span class="allrelayurl">{{ displayUrl(r.url) }}</span>
+            <span v-if="r.read" class="relaybadge in" title="inbox (read) relay">IN</span>
+            <span v-if="r.write" class="relaybadge out" title="outbox (write) relay">OUT</span>
+          </div>
+          <div v-for="r in inbox_relays" :key="r.url" class="allrelayitem">
+            <span class="allrelayurl">{{ displayUrl(r.url) }}</span>
+            <span v-if="r.read" class="relaybadge in" title="inbox (read) relay">IN</span>
+            <span v-if="r.write" class="relaybadge out" title="outbox (write) relay">OUT</span>
+            <span class="relaybadge hidden" title="Not shown in main relay list">hidden</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="relaygrid" v-if="relays && relays.length" ref="gridEl" :style="{'--ndots': relays.length}">
       <table class="relaytable">
         <thead>
@@ -71,7 +90,7 @@
                 <div v-for="r in relays" :key="r.url" class="dot"></div>
               </div>
             </th>
-            <th>Relay</th>
+            <th>Relay<a v-if="inbox_relays.length" class="showalllink" @click="showAllModal = true">show all</a></th>
             <th>Notes</th>
             <th>Status</th>
             <th title="kind 10002">Relay List</th>
@@ -159,7 +178,7 @@ import { queryProfile } from 'nostr-tools/nip05'
 const pubkey = ref(null)
 const pubkeySource = ref(null)  // 'extension' | 'external' — where the current pubkey came from
 const npub = ref(null)
-const relays = ref(null)  // [{url: relayurl, relaylist: bool}]
+const relays = ref(null)  // [{url: relayurl, userlist: bool, read: bool, write: bool}] — inbox-only (read, !write) relays live in inbox_relays instead
 const pillMenu = ref(false)
 const pillMeta = ref(null)  // {name, picture} | null — parsed latest kind-0 content
 const pillColor = computed(() => pubkey.value ? '#' + pubkey.value.slice(0, 6) : '#888')
@@ -180,6 +199,13 @@ const switchError = ref('')
 const switchInputEl = ref(null)
 watch(switchModal, (open) => {
   if (open) nextTick(() => switchInputEl.value?.focus())
+})
+const inbox_relays = ref([])  // read-only ("inbox") relays: never fetched, hidden from the relay table
+const showAllModalOpen = ref(false)
+// The modal can only be visible while at least one inbox-only relay is configured.
+const showAllModal = computed({
+  get: () => showAllModalOpen.value && inbox_relays.value.length > 0,
+  set: v => { showAllModalOpen.value = v }
 })
 const svgW = ref(0)
 const svgH = ref(0)
@@ -243,7 +269,7 @@ onUnmounted(() => {
 
 // Close the switch-user modal on ESC.
 function onEscKey(e) {
-  if (e.key === 'Escape') switchModal.value = false
+  if (e.key === 'Escape') { switchModal.value = false; showAllModal.value = false }
 }
 onMounted(() => document.addEventListener('keydown', onEscKey))
 onUnmounted(() => document.removeEventListener('keydown', onEscKey))
@@ -258,8 +284,9 @@ let breakFirstRound = false  // set when a 10002 event covers all its referenced
 function checkBreak(event) {
   // Every relay referenced by this event's 'r' tags must already have
   // given us a 10002 event (truthy, i.e. not `false`/`undefined`).
+  // Read-only (inbox) relays are never fetched, so they can't block this.
   for (const t of event.tags) {
-    if (t[0] !== 'r') continue
+    if (t[0] !== 'r' || t[2] === 'read') continue
     let url = t[1]
     try { url = normalizeURL(t[1]) } catch { /* fall back to raw */ }
     const found = relays.value.find(r => r.url === url)
@@ -296,20 +323,38 @@ function getOnEventFn(relay) {
         if (trackLatest(event, relay.url)) {
           for (let t of event.tags) {
             // console.log('tag', t)
-            let found = false
             if (t[0] !== 'r') continue
             let nurl = normalizeURL(t[1])
+            if (t[2] === 'read') {
+              // Inbox-only relay: never fetch from it, keep it out of the main list.
+              let midx = relays.value.findIndex(r => r.url === nurl)
+              if (midx >= 0) {
+                // Downgrade: the latest relay list marks it read-only.
+                let [old] = relays.value.splice(midx, 1)
+                old.relay?.close()
+              }
+              if (!inbox_relays.value.some(r => r.url === nurl)) {
+                inbox_relays.value.push({url: nurl, read: true, write: false})
+              }
+              continue
+            }
+            // Upgrade: was inbox-only, now has a write role in the latest relay list.
+            let iidx = inbox_relays.value.findIndex(r => r.url === nurl)
+            if (iidx >= 0) inbox_relays.value.splice(iidx, 1)
+            let found = false
             for (let r of relays.value) {
               if (r.url == nurl) {
                 // Updating existing relay props.
                 // console.log('Relay is in userlist', r.url)
                 r.userlist = true
+                r.read = t[2] !== 'write'
+                r.write = true
                 found = true
               }
             }
             if (!found) {
               // Add relay to the end of wrelays.
-              let nr = {url: nurl, userlist: true, events: {}, note_ids: new Set(), note_last_ts: null}
+              let nr = {url: nurl, userlist: true, read: t[2] !== 'write', write: true, events: {}, note_ids: new Set(), note_last_ts: null}
               relays.value.push(nr)
               newpromises.push(
                 skyLaunch(
@@ -511,10 +556,10 @@ async function startSession(targetPk) {
 
   // Bootstrap relays. TODO: add a second round with 30+ items.
   relays.value = [
-    {url: "wss://purplepag.es/", userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
-    {url: "wss://nostr.wine/", userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
-    {url: "wss://nos.lol/", userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
-    {url: "wss://relay.damus.io/", userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
+    {url: "wss://purplepag.es/", userlist: false, read: true, write: true, events: {}, note_ids: new Set(), note_last_ts: null},
+    {url: "wss://nostr.wine/", userlist: false, read: true, write: true, events: {}, note_ids: new Set(), note_last_ts: null},
+    {url: "wss://nos.lol/", userlist: false, read: true, write: true, events: {}, note_ids: new Set(), note_last_ts: null},
+    {url: "wss://relay.damus.io/", userlist: false, read: true, write: true, events: {}, note_ids: new Set(), note_last_ts: null},
   ]
 
   for (let r of relays.value) {
@@ -574,11 +619,24 @@ async function startSession(targetPk) {
       if (t[0] !== 'r') continue
       let url = t[1]
       try { url = normalizeURL(t[1]) } catch { /* fall back to raw */ }
+      if (t[2] === 'read') {
+        // Inbox-only relay: never fetch from it, keep it out of the main list.
+        // A matching main-list entry stays in byUrl and is closed with the orphans below.
+        if (!inbox_relays.value.some(r => r.url === url)) {
+          inbox_relays.value.push({url, read: true, write: false})
+        }
+        continue
+      }
+      // Upgrade: was inbox-only, now has a write role in the latest relay list.
+      let iidx = inbox_relays.value.findIndex(r => r.url === url)
+      if (iidx >= 0) inbox_relays.value.splice(iidx, 1)
       let existing = byUrl.get(url)
       if (existing) {
         existing.userlist = true
+        existing.read = t[2] !== 'write'
+        existing.write = true
       } else {
-        existing = {url, userlist: true, events: {}, note_ids: new Set(), note_last_ts: null}
+        existing = {url, userlist: true, read: t[2] !== 'write', write: true, events: {}, note_ids: new Set(), note_last_ts: null}
       }
       synced.push(existing)
       byUrl.delete(url)
@@ -642,6 +700,8 @@ function cleanup() {
   fixReady.value = false
   fixing.value = false
   bootstrap_only_relays.value = []
+  inbox_relays.value = []
+  showAllModal.value = false
   notes.value = []
   hovered_relay.value = -1
   tentacles.value = []
@@ -1145,6 +1205,50 @@ onMounted(async () => {
 .modalerror {
   color: #f66;
   font-size: 0.85em;
+}
+.showalllink {
+  color: var(--purple5);
+  text-decoration: underline;
+  cursor: pointer;
+  margin-left: 0.6em;
+  font-size: 0.85em;
+  font-weight: normal;
+}
+.allrelaylist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.allrelayitem {
+  display: flex;
+  align-items: center;
+}
+.allrelayurl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.relaybadge {
+  font-size: 0.7em;
+  border-radius: 1em;
+  padding: 0 0.5em;
+  margin-left: 0.5em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.relaybadge.in {
+  background: goldenrod;
+  color: #fff;
+}
+.relaybadge.out {
+  background: green;
+  color: #fff;
+}
+.relaybadge.hidden {
+  background: darkorange;
+  color: #fff;
 }
 .fixbtn {
   font-size: 1.3em;
