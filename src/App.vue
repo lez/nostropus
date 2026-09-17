@@ -159,7 +159,7 @@ import { queryProfile } from 'nostr-tools/nip05'
 const pubkey = ref(null)
 const pubkeySource = ref(null)  // 'extension' | 'external' — where the current pubkey came from
 const npub = ref(null)
-const relays = ref(null)  // [{url: relayurl, extension: bool, relaylist: bool}]
+const relays = ref(null)  // [{url: relayurl, relaylist: bool}]
 const pillMenu = ref(false)
 const pillMeta = ref(null)  // {name, picture} | null — parsed latest kind-0 content
 const pillColor = computed(() => pubkey.value ? '#' + pubkey.value.slice(0, 6) : '#888')
@@ -309,7 +309,7 @@ function getOnEventFn(relay) {
             }
             if (!found) {
               // Add relay to the end of wrelays.
-              let nr = {url: nurl, extension: false, userlist: true, events: {}, note_ids: new Set(), note_last_ts: null}
+              let nr = {url: nurl, userlist: true, events: {}, note_ids: new Set(), note_last_ts: null}
               relays.value.push(nr)
               newpromises.push(
                 skyLaunch(
@@ -509,33 +509,13 @@ async function startSession(targetPk) {
   pubkey.value = pk
   console.log(`Pubkey is ${pk}`)
 
-  if (window.nostr?.getRelays) {
-    let rlist = await window.nostr.getRelays()
-    console.log(rlist)
-
-    // TODO: Differentiate read and write relays.
-    relays.value = Object.keys(rlist || {}).map(
-      function(r) {
-        return {
-          url: normalizeURL(r),
-          extension: true,
-          userlist: false,
-          events: {},
-          note_ids: new Set(),
-          note_last_ts: null,
-        }
-      }
-    )
-  }
-
-  if (!relays.value?.length) {
-    // Extension provided no relays, bootstrap with default relays.
-    relays.value = [
-      {url: "wss://purplepag.es/", extension: true, userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
-      {url: "wss://nos.lol/", extension: true, userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
-      {url: "wss://relay.damus.io/", extension: true, userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
-    ]
-  }
+  // Bootstrap relays. TODO: add a second round with 30+ items.
+  relays.value = [
+    {url: "wss://purplepag.es/", userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
+    {url: "wss://nostr.wine/", userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
+    {url: "wss://nos.lol/", userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
+    {url: "wss://relay.damus.io/", userlist: false, events: {}, note_ids: new Set(), note_last_ts: null},
+  ]
 
   for (let r of relays.value) {
     promises.push(skyLaunch(r))
@@ -598,7 +578,7 @@ async function startSession(targetPk) {
       if (existing) {
         existing.userlist = true
       } else {
-        existing = {url, extension: false, userlist: true, events: {}, note_ids: new Set(), note_last_ts: null}
+        existing = {url, userlist: true, events: {}, note_ids: new Set(), note_last_ts: null}
       }
       synced.push(existing)
       byUrl.delete(url)
