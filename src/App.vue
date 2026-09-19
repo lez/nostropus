@@ -80,6 +80,7 @@
     </div>
 
     <div class="relaygrid" v-if="relays && relays.length" ref="gridEl" :style="{'--ndots': relays.length}">
+      <img v-if="stuck" class="minilogo" src="/img/nostropus.png">
       <table class="relaytable">
         <thead>
           <tr class="bold">
@@ -192,6 +193,7 @@ const bootstrap_only_relays = ref([])
 const notes = ref([])
 const hovered_relay = ref(-1)
 const gridEl = ref(null)
+const stuck = ref(false)  // true while the relay table is stuck to the viewport top
 const tentacles = ref([])  // SVG path strings, one per relay
 const switchModal = ref(false)
 const switchInput = ref('')
@@ -225,6 +227,10 @@ function redrawTentacles() {
     return
   }
   const dots = firstNote.querySelectorAll('.dot')
+  // While the table is stuck to the viewport top, the first note's dots
+  // scroll underneath it; end the tentacles statically at the table's
+  // bottom edge instead of following the dots.
+  const stuckY1 = grid.querySelector('.relaytable').getBoundingClientRect().bottom - gbox.top
   const paths = []
   for (let i = 0; i < relays.value.length; i++) {
     const row = rows[i]
@@ -235,7 +241,7 @@ function redrawTentacles() {
     const x0 = rbox.left - gbox.left - 5
     const y0 = rbox.top + rbox.height / 2 - gbox.top
     const x1 = dbox.left + dbox.width / 2 - gbox.left
-    const y1 = dbox.top - gbox.top + 4
+    const y1 = stuck.value ? stuckY1 : dbox.top - gbox.top + 4
     const d = `M ${x0} ${y0} C ${x0 + (x1 - x0) * 0.6} ${y0}, ${x1} ${y0 + (y1 - y0) * 0.4}, ${x1} ${y1}`
     paths.push(d)
   }
@@ -245,6 +251,7 @@ function redrawTentacles() {
 let tentacleObserver = null
 watch(gridEl, (el, oldEl) => {
   if (oldEl && tentacleObserver) tentacleObserver.unobserve(oldEl)
+  if (!el) stuck.value = false
   if (el) {
     if (!tentacleObserver) tentacleObserver = new ResizeObserver(() => redrawTentacles())
     tentacleObserver.observe(el)
@@ -252,6 +259,24 @@ watch(gridEl, (el, oldEl) => {
   }
 })
 watch(() => [relays.value?.length, notes.value.length], () => nextTick(redrawTentacles))
+
+// Track whether the sticky relay table is currently stuck to the viewport
+// top (the mini logo is shown then), and redraw the tentacles so they stay
+// attached to the stuck relay rows while the notes scroll underneath.
+let scrollRaf = 0
+function onScroll() {
+  if (scrollRaf) return
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = 0
+    stuck.value = gridEl.value ? gridEl.value.getBoundingClientRect().top < 0 : false
+    redrawTentacles()
+  })
+}
+onMounted(() => window.addEventListener('scroll', onScroll, {passive: true}))
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
+  cancelAnimationFrame(scrollRaf)
+})
 
 // Parse the latest kind-0 profile event into the pill's {name, picture}.
 watch(() => latest_event.value[0], (ev) => {
@@ -989,14 +1014,28 @@ onMounted(async () => {
   z-index: 5;  /* Below the modal overlay (z-index 10). */
 }
 .relaygrid {
-  display: grid;
+  /* Block, not grid: a sticky grid item is confined to its own grid area,
+     so the relay table could not stick to the viewport top. */
+  display: block;
   position: relative;
+}
+.minilogo {
+  position: fixed;
+  top: 6px;
+  left: 6px;
+  height: 2.5em;
+  z-index: 6;  /* Above the stuck table and the tentacles, below the modal (10). */
 }
 .tentacles {
   position: absolute;
   top: 0;
   left: 0;
   pointer-events: none;
+}
+/* Keep the tentacles above the stuck relay table (z-index 2), as they were
+   when the table was static: they start at the relay rows. */
+svg.tentacles {
+  z-index: 3;
 }
 .tentacles path {
   fill: none;
@@ -1013,6 +1052,14 @@ onMounted(async () => {
 .relaytable {
   width: 100%;
   border-collapse: collapse;
+  /* Stick to the viewport top while the notes list is scrolled. The solid
+     background keeps the notes scrolling underneath from showing through.
+     z-index is needed because content-visibility:auto makes every note row
+     a stacking context, which would otherwise paint above the stuck table. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--purple1);
 }
 .relaytable th, .relaytable td {
   text-align: left;
