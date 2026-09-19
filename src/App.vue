@@ -81,71 +81,77 @@
 
     <div class="relaygrid" v-if="relays && relays.length" ref="gridEl" :style="{'--ndots': relays.length}">
       <img v-if="stuck" class="minilogo" src="/img/nostropus.png">
-      <table class="relaytable">
-        <thead>
-          <tr class="bold">
-            <th class="tentaclecol">
-              <!-- Hidden dots line: stretches this column to match the dots
-                   column width in the note grid (N dots * 1.6em). -->
-              <div class="dots dots-hidden" v-if="notes.length">
-                <div v-for="r in relays" :key="r.url" class="dot"></div>
-              </div>
-            </th>
-            <th>Relay<a v-if="inbox_relays.length" class="showalllink" @click="showAllModal = true">show all</a></th>
-            <th>Notes</th>
-            <th>Status</th>
-            <th title="kind 10002">Relay List</th>
-            <th title="kind 0">Profile</th>
-            <th title="kind 3">Follows</th>
-            <th title="kind 10063">Blossom</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="relayline" v-for="r, ridx in relays" @mouseover="dot_hover(ridx)" @mouseleave="dot_blur">
-            <td class="tentacles"></td>
-            <td class="relayurl">
-              <span :class="{hovered: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '').replace(/\/$/, '')}}</span>
-            </td>
-            <td>
-              <span v-if="r.note_ids.size > 0" :class="{green: r.eosed && r.note_ids.size == notes.length, yellow: r.eosed && r.note_ids.size < notes.length}">{{ r.note_ids.size }}</span>
-              <button v-if="fixReady && r.eosed && r.note_ids.size < notes.length" class="fixbtn small ready" :disabled="fixing" @click="onFixEvents(r)"><svg class="fixicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="3.5" y1="20.5" x2="9" y2="15" stroke-width="5"/><line x1="10" y1="14" x2="18" y2="6" stroke-width="2"/><line x1="15.8" y1="3.8" x2="18.2" y2="6.2" stroke-width="2.2"/></svg> fix</button>
-            </td>
-            <td>
-              <span v-if="r.error" class="errpill" :title="String(r.error)">{{ formatError(r.error) }}</span>
-              <a v-if="r.error" class="retrylink" :class="{disabled: r.retrying}" @click="onRetry(r)">{{ r.retrying ? 'retrying...' : 'retry' }}</a>
-              <span v-if="r.progress" class="relayprogress">{{ r.progress }}</span>
-            </td>
+      <div class="stickywrap" ref="wrapEl">
+        <table class="relaytable">
+          <thead>
+            <tr class="bold">
+              <th class="tentaclecol">
+                <!-- Hidden dots line: stretches this column to match the dots
+                     column width in the note grid (N dots * 1.6em). -->
+                <div class="dots dots-hidden" v-if="notes.length">
+                  <div v-for="r in relays" :key="r.url" class="dot"></div>
+                </div>
+              </th>
+              <th>Relay<a v-if="inbox_relays.length" class="showalllink" @click="showAllModal = true">show all</a></th>
+              <th>Notes</th>
+              <th>Status</th>
+              <th title="kind 10002">Relay List</th>
+              <th title="kind 0">Profile</th>
+              <th title="kind 3">Follows</th>
+              <th title="kind 10063">Blossom</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="relayline" v-for="r, ridx in relays" @mouseover="dot_hover(ridx)" @mouseleave="dot_blur">
+              <td class="tentacles"></td>
+              <td class="relayurl">
+                <span :class="{hovered: (hovered_relay == ridx)}">{{r.url.replace(/^wss?:\/\//, '').replace(/\/$/, '')}}</span>
+              </td>
+              <td>
+                <span v-if="r.note_ids.size > 0" :class="{green: r.eosed && r.note_ids.size == notes.length, yellow: r.eosed && r.note_ids.size < notes.length}">{{ r.note_ids.size }}</span>
+                <button v-if="fixReady && r.eosed && r.note_ids.size < notes.length" class="fixbtn small ready" :disabled="fixing" @click="onFixEvents(r)"><svg class="fixicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="3.5" y1="20.5" x2="9" y2="15" stroke-width="5"/><line x1="10" y1="14" x2="18" y2="6" stroke-width="2"/><line x1="15.8" y1="3.8" x2="18.2" y2="6.2" stroke-width="2.2"/></svg> fix</button>
+              </td>
+              <td>
+                <span v-if="r.error" class="errpill" :title="String(r.error)">{{ formatError(r.error) }}</span>
+                <a v-if="r.error" class="retrylink" :class="{disabled: r.retrying}" @click="onRetry(r)">{{ r.retrying ? 'retrying...' : 'retry' }}</a>
+                <span v-if="r.progress" class="relayprogress">{{ r.progress }}</span>
+              </td>
 
-            <!-- relaylist -->
-            <td>
-              <div v-if="r.events[10002]" :class="{green: r.events[10002].id == latest_event[10002].id}" :title="formatFullTime(r.events[10002].created_at)">{{ formatTime(r.events[10002].created_at) }}
-              </div>
-              <div v-if="10002 in r.events && !r.events[10002]" class="red">event not found</div>
-            </td>
+              <!-- relaylist -->
+              <td>
+                <div v-if="r.events[10002]" :class="{green: r.events[10002].id == latest_event[10002].id}" :title="formatFullTime(r.events[10002].created_at)">{{ formatTime(r.events[10002].created_at) }}
+                </div>
+                <div v-if="10002 in r.events && !r.events[10002]" class="red">event not found</div>
+              </td>
 
-            <!-- profile -->
-            <td>
-              <div v-if="r.events[0]" :class="{green: r.events[0].id == latest_event[0].id}" :title="formatFullTime(r.events[0].created_at)">{{ formatTime(r.events[0].created_at) }}
-              </div>
-              <div v-if="0 in r.events && !r.events[0]" class="red">event not found</div>
-            </td>
+              <!-- profile -->
+              <td>
+                <div v-if="r.events[0]" :class="{green: r.events[0].id == latest_event[0].id}" :title="formatFullTime(r.events[0].created_at)">{{ formatTime(r.events[0].created_at) }}
+                </div>
+                <div v-if="0 in r.events && !r.events[0]" class="red">event not found</div>
+              </td>
 
-            <!-- Follows -->
-            <td>
-              <div v-if="r.events[3]" :class="{green: r.events[3].id == latest_event[3].id}" :title="formatFullTime(r.events[3].created_at)">{{ formatTime(r.events[3].created_at) }}
-              </div>
-              <div v-if="3 in r.events && !r.events[3]" class="red">event not found</div>
-            </td>
+              <!-- Follows -->
+              <td>
+                <div v-if="r.events[3]" :class="{green: r.events[3].id == latest_event[3].id}" :title="formatFullTime(r.events[3].created_at)">{{ formatTime(r.events[3].created_at) }}
+                </div>
+                <div v-if="3 in r.events && !r.events[3]" class="red">event not found</div>
+              </td>
 
-            <!-- Blossom -->
-            <td>
-              <div v-if="r.events[10063]" :class="{green: r.events[10063].id == latest_event[10063].id}" :title="formatFullTime(r.events[10063].created_at)">{{ formatTime(r.events[10063].created_at) }}
-              </div>
-              <div v-if="10063 in r.events && !r.events[10063]" class="red">event not found</div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              <!-- Blossom -->
+              <td>
+                <div v-if="r.events[10063]" :class="{green: r.events[10063].id == latest_event[10063].id}" :title="formatFullTime(r.events[10063].created_at)">{{ formatTime(r.events[10063].created_at) }}
+                </div>
+                <div v-if="10063 in r.events && !r.events[10063]" class="red">event not found</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <svg v-if="tentacles.length" class="tentacles" :width="svgW" :height="svgH" :viewBox="`0 0 ${svgW} ${svgH}`">
+          <path v-for="(d, idx) in tentacles" :key="idx" :d="d" :class="{thick: idx == hovered_relay}" />
+        </svg>
+      </div>
 
       <div v-if="allSettled" v-for="note in notes" :key="note.id" class="note">
         <div class="dots">
@@ -156,10 +162,6 @@
         <span class="note-created-at" :title="formatFullTime(note.created_at)">{{ formatTime(note.created_at) }}</span>
         <span class="note-content">{{ note.content.substr(0, 81) }}</span>
       </div>
-
-      <svg v-if="tentacles.length" class="tentacles" :width="svgW" :height="svgH" :viewBox="`0 0 ${svgW} ${svgH}`">
-        <path v-for="(d, idx) in tentacles" :key="idx" :d="d" :class="{thick: idx == hovered_relay}" />
-      </svg>
     </div>
 
     <div class="appfooter">
@@ -193,6 +195,7 @@ const bootstrap_only_relays = ref([])
 const notes = ref([])
 const hovered_relay = ref(-1)
 const gridEl = ref(null)
+const wrapEl = ref(null)  // sticky wrapper around the relay table and the tentacles SVG
 const stuck = ref(false)  // true while the relay table is stuck to the viewport top
 const tentacles = ref([])  // SVG path strings, one per relay
 const switchModal = ref(false)
@@ -216,11 +219,15 @@ const allSettled = computed(() => relays.value && relays.value.length && relays.
 
 function redrawTentacles() {
   const grid = gridEl.value
-  if (!grid || !relays.value) return
-  const gbox = grid.getBoundingClientRect()
+  const wrap = wrapEl.value
+  if (!grid || !wrap || !relays.value) return
+  // Tentacle coordinates are relative to the sticky wrapper, so they are
+  // scroll-invariant: the wrapper's content never moves relative to itself.
+  // No redraws are needed while scrolling.
+  const gbox = wrap.getBoundingClientRect()
   svgW.value = gbox.width
   svgH.value = gbox.height
-  const rows = grid.querySelectorAll('.relaytable tbody tr.relayline')
+  const rows = wrap.querySelectorAll('.relaytable tbody tr.relayline')
   const firstNote = grid.querySelector('.note')
   if (!firstNote) {
     tentacles.value = []
@@ -229,8 +236,8 @@ function redrawTentacles() {
   const dots = firstNote.querySelectorAll('.dot')
   // While the table is stuck to the viewport top, the first note's dots
   // scroll underneath it; end the tentacles statically at the table's
-  // bottom edge instead of following the dots.
-  const stuckY1 = grid.querySelector('.relaytable').getBoundingClientRect().bottom - gbox.top
+  // bottom edge (= the wrapper's height) instead of following the dots.
+  const stuckY1 = gbox.height
   const paths = []
   for (let i = 0; i < relays.value.length; i++) {
     const row = rows[i]
@@ -261,15 +268,20 @@ watch(gridEl, (el, oldEl) => {
 watch(() => [relays.value?.length, notes.value.length], () => nextTick(redrawTentacles))
 
 // Track whether the sticky relay table is currently stuck to the viewport
-// top (the mini logo is shown then), and redraw the tentacles so they stay
-// attached to the stuck relay rows while the notes scroll underneath.
+// top (the mini logo is shown then). The tentacles live inside the sticky
+// wrapper, so their coordinates are scroll-invariant and only need a
+// redraw when the stuck state itself changes (y1 switches between the
+// first note's dot and the table's bottom edge).
 let scrollRaf = 0
 function onScroll() {
   if (scrollRaf) return
   scrollRaf = requestAnimationFrame(() => {
     scrollRaf = 0
-    stuck.value = gridEl.value ? gridEl.value.getBoundingClientRect().top < 0 : false
-    redrawTentacles()
+    const nowStuck = gridEl.value ? gridEl.value.getBoundingClientRect().top < 0 : false
+    if (nowStuck !== stuck.value) {
+      stuck.value = nowStuck
+      redrawTentacles()
+    }
   })
 }
 onMounted(() => window.addEventListener('scroll', onScroll, {passive: true}))
@@ -1015,7 +1027,7 @@ onMounted(async () => {
 }
 .relaygrid {
   /* Block, not grid: a sticky grid item is confined to its own grid area,
-     so the relay table could not stick to the viewport top. */
+     so the sticky wrapper could not stick to the viewport top. */
   display: block;
   position: relative;
 }
@@ -1032,10 +1044,12 @@ onMounted(async () => {
   left: 0;
   pointer-events: none;
 }
-/* Keep the tentacles above the stuck relay table (z-index 2), as they were
-   when the table was static: they start at the relay rows. */
+/* Tentacles paint above the table inside the sticky wrapper, and overflow
+   the SVG's box so they can reach the first note's dots below the wrapper
+   when the table is not stuck. */
 svg.tentacles {
   z-index: 3;
+  overflow: visible;
 }
 .tentacles path {
   fill: none;
@@ -1049,17 +1063,20 @@ svg.tentacles {
   stroke-width: 4;
   stroke-opacity: 0.9;
 }
-.relaytable {
-  width: 100%;
-  border-collapse: collapse;
-  /* Stick to the viewport top while the notes list is scrolled. The solid
-     background keeps the notes scrolling underneath from showing through.
-     z-index is needed because content-visibility:auto makes every note row
-     a stacking context, which would otherwise paint above the stuck table. */
+/* Sticky container of the relay table and the tentacles SVG: sticks to the
+   viewport top while the notes list is scrolled. The solid background keeps
+   the notes scrolling underneath from showing through. z-index is needed
+   because content-visibility:auto makes every note row a stacking context,
+   which would otherwise paint above the stuck wrapper. */
+.stickywrap {
   position: sticky;
   top: 0;
   z-index: 2;
   background: var(--purple1);
+}
+.relaytable {
+  width: 100%;
+  border-collapse: collapse;
 }
 .relaytable th, .relaytable td {
   text-align: left;
