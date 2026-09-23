@@ -985,6 +985,7 @@ onMounted(async () => {
 
 <style scoped>
 .app {
+  padding: 0px 16px;
   padding-bottom: 44px;  /* Room for the fixed footer. */
 }
 .landing {
@@ -1123,7 +1124,7 @@ svg.tentacles {
   overflow: hidden;
 }
 .relayline > td {
-  transition: background 0.15s ease;
+  transition: background 0.05s ease;
 }
 .relayline:hover > td:not(:first-child) {
   background: var(--purple2);
