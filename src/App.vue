@@ -883,7 +883,7 @@ async function onFixEvents(r) {
   fixing.value = true
   r.fixurl = displayUrl(r.url)
 
-  // Make sure we have a live connection (3 attempts, 5s timeout each).
+  // Make sure we have a live connection (single strict attempt).
   if (!await connectRelay(r)) { fixing.value = false; return }
   r.error = null  // Clear any stale error now that we're connected.
 
