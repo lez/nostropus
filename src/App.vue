@@ -1177,6 +1177,9 @@ svg.tentacles {
   display: grid;
   white-space: nowrap;
 }
+.eventdate {
+  cursor: pointer;  /* Opens the event on nostr.at. */
+}
 .note-content {
   /* No fixed width: the grid's fr track lets the text span the remaining
      screen width; overflow still collapses into an ellipsis. */
@@ -1189,6 +1192,7 @@ svg.tentacles {
   white-space: nowrap;
   padding-left: 9px;
   opacity: 50%;
+  cursor: pointer;  /* Opens the note on nostr.at. */
 }
 .relayurl {
   padding-left: 18px;
