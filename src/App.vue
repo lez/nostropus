@@ -21,7 +21,7 @@
         <div v-if="pillMenu" class="pillmenu" @click.stop>
           <div class="pillmenuitem" @click="pillMenu = false; onCopyNpub()">Copy npub</div>
           <div class="pillmenuitem" @click="pillMenu = false; switchModal = true">Switch user (to anyone)</div>
-          <div v-if="pubkeySource === 'external'" class="pillmenuitem" @click="pillMenu = false; cleanup(); onLogin()">Log in via extension</div>
+          <div v-if="pubkeySource === 'external' && hasNostrExt" class="pillmenuitem" @click="pillMenu = false; cleanup(); onLogin()">Log in via extension</div>
           <div class="pillmenuitem" @click="pillMenu = false; onLogout()">Log out</div>
         </div>
       </div>
@@ -32,7 +32,7 @@
 
     <div v-if="!pubkey" class="landing">
       <div class="landingbuttons">
-        <button @click="onLogin">Log in</button>
+        <button v-if="hasNostrExt" @click="onLogin">Log in</button>
         <button @click="switchModal = true">View any nostr user</button>
       </div>
       <div class="cards">
@@ -180,6 +180,7 @@ import { queryProfile } from 'nostr-tools/nip05'
 
 const pubkey = ref(null)
 const pubkeySource = ref(null)  // 'extension' | 'external' — where the current pubkey came from
+const hasNostrExt = ref(!!window.nostr)  // NIP-07 extension detected; a missing one is not an error, it just hides the login buttons
 const npub = ref(null)
 const relays = ref(null)  // [{url: relayurl, userlist: bool, read: bool, write: bool}] — inbox-only (read, !write) relays live in inbox_relays instead
 const pillMenu = ref(false)
@@ -945,6 +946,9 @@ function formatError(e) {
 
 onMounted(async () => {
   console.clear()
+  // Detect a NIP-07 extension (it may inject slightly after page load).
+  // A missing one is not an error: the login buttons just stay hidden.
+  const extReady = waitForWindowNostr().then(() => { hasNostrExt.value = !!window.nostr })
   let pk = window.localStorage.getItem('pubkey')
   pubkeySource.value = window.localStorage.getItem('pubkey_source')
   if (pk) {
@@ -952,8 +956,8 @@ onMounted(async () => {
       // External pubkey: no extension needed, start directly with it.
       await startSession(pk)
     } else {
-      await waitForWindowNostr()
-      onLogin()
+      await extReady
+      if (window.nostr) onLogin()
     }
   }
 })
