@@ -119,28 +119,28 @@
 
               <!-- relaylist -->
               <td>
-                <div v-if="r.events[10002]" :class="{green: r.events[10002].id == latest_event[10002].id}" :title="formatFullTime(r.events[10002].created_at)">{{ formatTime(r.events[10002].created_at) }}
+                <div v-if="r.events[10002]" class="eventdate" :class="{green: r.events[10002].id == latest_event[10002].id}" :title="formatFullTime(r.events[10002].created_at)" @click="onEventClick(r.events[10002])">{{ formatTime(r.events[10002].created_at) }}
                 </div>
                 <div v-if="10002 in r.events && !r.events[10002]" class="red">event not found</div>
               </td>
 
               <!-- profile -->
               <td>
-                <div v-if="r.events[0]" :class="{green: r.events[0].id == latest_event[0].id}" :title="formatFullTime(r.events[0].created_at)">{{ formatTime(r.events[0].created_at) }}
+                <div v-if="r.events[0]" class="eventdate" :class="{green: r.events[0].id == latest_event[0].id}" :title="formatFullTime(r.events[0].created_at)" @click="onEventClick(r.events[0])">{{ formatTime(r.events[0].created_at) }}
                 </div>
                 <div v-if="0 in r.events && !r.events[0]" class="red">event not found</div>
               </td>
 
               <!-- Follows -->
               <td>
-                <div v-if="r.events[3]" :class="{green: r.events[3].id == latest_event[3].id}" :title="formatFullTime(r.events[3].created_at)">{{ formatTime(r.events[3].created_at) }}
+                <div v-if="r.events[3]" class="eventdate" :class="{green: r.events[3].id == latest_event[3].id}" :title="formatFullTime(r.events[3].created_at)" @click="onEventClick(r.events[3])">{{ formatTime(r.events[3].created_at) }}
                 </div>
                 <div v-if="3 in r.events && !r.events[3]" class="red">event not found</div>
               </td>
 
               <!-- Blossom -->
               <td>
-                <div v-if="r.events[10063]" :class="{green: r.events[10063].id == latest_event[10063].id}" :title="formatFullTime(r.events[10063].created_at)">{{ formatTime(r.events[10063].created_at) }}
+                <div v-if="r.events[10063]" class="eventdate" :class="{green: r.events[10063].id == latest_event[10063].id}" :title="formatFullTime(r.events[10063].created_at)" @click="onEventClick(r.events[10063])">{{ formatTime(r.events[10063].created_at) }}
                 </div>
                 <div v-if="10063 in r.events && !r.events[10063]" class="red">event not found</div>
               </td>
@@ -570,6 +570,17 @@ function fetchNotes(r) {
 function noteOutOfRange(r, note) {
   if (r.eosed) return false
   return note.created_at < r.note_last_ts
+}
+
+// Open an event (note or replaceable event) on the nostr.at viewer. The
+// nevent is encoded on click from the event's id/pubkey/kind plus the
+// relays that actually store it, so the viewer knows where to fetch it from.
+function onEventClick(ev) {
+  const relayHints = relays.value
+    .filter(r => r.note_ids.has(ev.id) || r.events[ev.kind]?.id === ev.id)
+    .map(r => r.url)
+  const nevent = nip19.neventEncode({id: ev.id, author: ev.pubkey, kind: ev.kind, relays: relayHints})
+  window.open(`https://nostr.at/${nevent}`, '_blank')
 }
 
 async function onLogin() {
