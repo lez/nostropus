@@ -81,7 +81,7 @@
 
     <div class="relaygrid" v-if="relays && relays.length" ref="gridEl" :style="{'--ndots': relays.length}">
       <img v-if="stuck" class="minilogo" src="/img/nostropus.png">
-      <div class="stickywrap" ref="wrapEl">
+      <div class="stickywrap" :class="{stuck}" ref="wrapEl">
         <table class="relaytable">
           <thead>
             <tr class="bold">
@@ -1057,7 +1057,7 @@ svg.tentacles {
   stroke-opacity: 0.45;
   stroke-width: 1.5;
   stroke-linecap: round;
-  transition: stroke-width 0.15s ease, stroke-opacity 0.15s ease;
+  transition: stroke-width 0.05s ease, stroke-opacity 0.05s ease;
 }
 .tentacles path.thick {
   stroke-width: 4;
@@ -1073,6 +1073,10 @@ svg.tentacles {
   top: 0;
   z-index: 2;
   background: var(--purple1);
+  transition: box-shadow 0.05s ease;
+}
+.stickywrap.stuck {
+  box-shadow: 0 6px 6px rgba(0, 0, 0, 0.55);
 }
 .relaytable {
   width: 100%;
