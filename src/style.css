@@ -117,7 +117,7 @@ a {
   display: grid;
   /* Dots column: per-dot width (matches .dot) times the number of relays,
      --ndots is set on .relaygrid; 8 dots is the default before it is known. */
-  grid-template-columns: calc(var(--ndots, 8) * 1.6em) max-content 0.3fr;
+  grid-template-columns: calc(var(--ndots, 8) * 1.6em) max-content 1fr;
   content-visibility: auto;  /* Skip rendering off-screen rows. */
   contain-intrinsic-size: auto 24px;  /* Estimated row height for scrollbar stability. */
 }
@@ -132,11 +132,10 @@ a {
 }
 .dot::after {
   content: '';
-  width: 0.55em;
-  height: 0.55em;
+  width: 0.77em;  /* The former hover size (0.55em * 1.4), now the permanent default. */
+  height: 0.77em;
   border-radius: 50%;
   background: #b00;
-  transition: transform 0.15s ease;
 }
 .dot.green::after {
   background: green;
