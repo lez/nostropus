@@ -159,8 +159,8 @@
             :class="{green: r.note_ids.has(note.id), yellow: r.limited_note_id == note.id, hollow: r.unreachable, unknown: !r.unreachable && !r.eosed && noteOutOfRange(r, note), bold: idx==hovered_relay}"
             @mouseover="dot_hover(idx)" @mouseleave="dot_blur"></div>
         </div>
-        <span class="note-created-at" :title="formatFullTime(note.created_at)">{{ formatTime(note.created_at) }}</span>
-        <span class="note-content">{{ note.content.substr(0, 81) }}</span>
+        <span class="note-created-at" :title="formatFullTime(note.created_at)" @click="onEventClick(note)">{{ formatTime(note.created_at) }}</span>
+        <span class="note-content">{{ note.content }}</span>
       </div>
     </div>
 
@@ -1178,7 +1178,8 @@ svg.tentacles {
   white-space: nowrap;
 }
 .note-content {
-  width: 300px;
+  /* No fixed width: the grid's fr track lets the text span the remaining
+     screen width; overflow still collapses into an ellipsis. */
   padding-left: 10px;
   overflow: hidden;
   text-overflow: ellipsis;
