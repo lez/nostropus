@@ -436,7 +436,7 @@ function skyLaunch(r, kinds=[10002]) {
     if (!r.relay) {
       r.relay = new Relay(r.url)
       console.log(`Connecting to [${r.url}]`)
-      connectRelay(r, 2000).then(connected => {  // Be strict on first round, the retry button is softer
+      connectRelay(r).then(connected => {
         if (!connected) { reject('websocket error'); return }
         // console.log("relay connected", r.url)
         r.relay.subscribe([{authors: [pk], kinds}], subparams)
@@ -818,19 +818,27 @@ function displayUrl(url) {
   return url.replace(/^wss?:\/\//, '').replace(/\/$/, '')
 }
 
-// Connect to a relay: up to 3 attempts with the given per-attempt timeout,
-// and at least 5 seconds between two attempts. Progress is shown in the
-// relay's Error column as 'Connecting... (n/3)'. Returns whether it is now
-// connected; on failure r.error and r.unreachable are set.
-async function connectRelay(r, timeout = 5000) {
-  for (let attempt = 1; !r.relay.connected && attempt <= 3; attempt++) {
-    r.progress = `Connecting... (${attempt}/3)`
-    r.relay.connectionTimeout = timeout
+// Connect to a relay. With retry=false (default, e.g. the initial load) be
+// strict: a single attempt with a 2 second timeout. With retry=true (the
+// user explicitly clicked the 'retry' button) be patient: up to 3 attempts
+// with a 5 second timeout each and at least 2 seconds between attempts.
+// Progress is shown in the relay's Error column as 'Connecting... (n/3)'.
+// Returns whether it is now connected; on failure r.error and
+// r.unreachable are set.
+async function connectRelay(r, {retry = false} = {}) {
+  const timeout = retry ? 5000 : 2000
+  const maxAttempts = retry ? 3 : 1
+  for (let attempt = 1; !r.relay.connected && attempt <= maxAttempts; attempt++) {
+    r.progress = retry ? `Connecting... (${attempt}/${maxAttempts})` : 'Connecting...'
     const started = Date.now()
-    try { await r.relay.connect() } catch (e) { r.error = e }
+    console.log("Connecting to", r.relay.url)
+    try { await r.relay.connect({timeout}) } catch (e) {
+      r.error = e 
+      console.log("Error connecting to ", r.relay.url, e.toString())
+    }
     const elapsed = Date.now() - started
-    if (!r.relay.connected && attempt < 3 && elapsed < 5000) {
-      await new Promise(res => setTimeout(res, 5000 - elapsed))
+    if (!r.relay.connected && attempt < maxAttempts && elapsed < 2000) {
+      await new Promise(res => setTimeout(res, 2000 - elapsed))
     }
   }
   if (!r.relay.connected) r.unreachable = true
@@ -839,10 +847,11 @@ async function connectRelay(r, timeout = 5000) {
 }
 
 async function onRetry(r) {
-  // Retry the initial connection to this relay, then re-fetch everything.
+  // Retry the connection to this relay, then re-fetch everything. The user
+  // explicitly clicked 'retry', so use the patient mode (3 attempts).
   if (r.retrying) return
   r.retrying = true
-  try { await r.relay.connect() } catch (e) { r.error = e; r.retrying = false; return }
+  if (!await connectRelay(r, {retry: true})) { r.retrying = false; return }
 
   // Connected now: clear the error, then fetch the replaceable kinds and the notes again.
   r.error = null
