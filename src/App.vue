@@ -166,7 +166,7 @@
 
     <div class="appfooter">
       Created out of frustration but with love by
-      <a href="https://jumble.social/npub1elta7cneng3w8p9y4dw633qzdjr4kyvaparuyuttyrx6e8xp7xnq32cume">@lez</a>
+      <a href="https://jumble.social/npub1elta7cneng3w8p9y4dw633qzdjr4kyvaparuyuttyrx6e8xp7xnq32cume">@lez</a> - <a href="https://github.com/lez/nostropus" target="_blank">source code</a>
     </div>
   </div>
 </template>
